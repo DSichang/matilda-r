@@ -1,0 +1,101 @@
+---
+title: "Multi-task learning from single-cell multimodal omics with matilda"
+output: BiocStyle::html_document
+vignette: >
+  %\VignetteIndexEntry{Getting started with matilda}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+# Overview
+
+[Matilda](https://github.com/PYangLab/Matilda) is a multi-task framework for
+single-cell multimodal omics (RNA, ADT, ATAC). A single multimodal variational
+autoencoder plus classifier is trained once and then reused for five tasks:
+**classification**, **dimension reduction**, **feature selection**,
+**data simulation**, and training-time **augmentation**.
+
+This package runs the original Matilda implementation from R on
+`SingleCellExperiment` / `MultiAssayExperiment` objects, writing results back
+into the object — so it slots into a standard Bioconductor workflow. The Python
+runtime is provisioned automatically by `r BiocStyle::Biocpkg("basilisk")`; you
+never install or manage Python yourself. A GPU is used when available and the
+package falls back to CPU otherwise.
+
+# Input
+
+A multimodal experiment is a `SingleCellExperiment` with RNA in the main assay
+and the other modalities as `altExps`:
+
+```{r data}
+library(matilda)
+library(SingleCellExperiment)
+
+# A small synthetic multimodal example: RNA counts in the main assay, ADT and
+# ATAC as altExps, and a colData column "cell_type" with the labels.
+sce <- matilda_example_sce()
+sce
+```
+
+Matilda expects raw counts for RNA/ADT and the Seurat gene-activity score for
+ATAC.
+
+# Train once, run many tasks
+
+The trained model is stored inside the object, so the workflow is pipeable and
+each task writes its results back:
+
+```{r workflow, eval = FALSE}
+sce <- matilda_train(sce, label = "cell_type")   # model stored in metadata(sce)$matilda
+sce <- matilda_reduce(sce)                         # reducedDim(sce, "MATILDA")
+sce <- matilda_classify(sce)                       # colData$matilda_pred / $matilda_prob
+
+reducedDim(sce, "MATILDA")[1:5, 1:3]
+table(sce$matilda_pred)
+```
+
+Feature selection returns per-cell-type marker importance, and simulation
+returns a new `SingleCellExperiment` of synthetic cells:
+
+```{r tasks, eval = FALSE}
+markers <- matilda_markers(sce, method = "IntegratedGradient")
+head(markers)                                      # celltype / feature / importance
+
+sim <- matilda_simulate(sce, celltype = "B.Naive", n = 200)
+```
+
+# Reference and query
+
+To apply a trained reference model to new (query) cells, pass it via `reference`:
+
+```{r query, eval = FALSE}
+query <- matilda_classify(query, reference = sce)
+query <- matilda_reduce(query,  reference = sce)
+```
+
+# Without SingleCellExperiment
+
+Plain matrices also work; training then returns a model handle and tasks return
+lists:
+
+```{r matrices, eval = FALSE}
+fit <- matilda_train(rna = rna_mat, adt = adt_mat, atac = atac_mat, cty = labels)
+res <- matilda_classify(list(rna = q_rna, adt = q_adt, atac = q_atac), reference = fit)
+res$pred; res$prob
+```
+
+# Notes
+
+- The first call builds the bundled Python environment (one-off, then cached).
+- Set `device = "cpu"` to force CPU, or `"cuda"` to require a GPU.
+- `matilda_example_teaseq()` returns paths to the bundled TEA-seq demo.
+
+# Session info
+
+```{r sessioninfo}
+sessionInfo()
+```

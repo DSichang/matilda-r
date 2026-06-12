@@ -18,6 +18,11 @@
 #'   training hyperparameters (defaults match upstream Matilda).
 #' @param device one of "auto", "cpu", "cuda".
 #' @return the input object with the model stored, or a \code{matilda_model} for matrices.
+#' @examples
+#' sce <- matilda_example_sce()
+#' \donttest{
+#'   sce <- matilda_train(sce, label = "cell_type", epochs = 2L)
+#' }
 #' @export
 matilda_train <- function(x = NULL, label = NULL,
                           rna = NULL, adt = NULL, atac = NULL, cty = NULL,
@@ -72,6 +77,13 @@ matilda_train <- function(x = NULL, label = NULL,
 #' @param cty path to the cell-type label .csv.
 #' @inheritParams matilda_train
 #' @return a \code{matilda_model}.
+#' @examples
+#' defaults <- formals(matilda_train_files)[c("epochs", "lr", "z_dim")]
+#' \donttest{
+#'   f <- matilda_example_teaseq()
+#'   m <- matilda_train_files(f["train_rna"], f["train_adt"], f["train_atac"],
+#'                            f["train_cty"], epochs = 2L)
+#' }
 #' @export
 matilda_train_files <- function(rna, adt = NULL, atac = NULL, cty,
                                 batch_size = 64L, epochs = 30L, lr = 0.02, z_dim = 100L,

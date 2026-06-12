@@ -12,6 +12,11 @@ new_matilda_model <- function(checkpoint, mode, label_levels, features, dims, hy
 #' @param x a \code{matilda_model}.
 #' @param ... unused.
 #' @return \code{x}, invisibly.
+#' @examples
+#' \donttest{
+#'   sce <- matilda_train(matilda_example_sce(), label = "cell_type", epochs = 2L)
+#'   print(matilda_model(sce))
+#' }
 #' @export
 print.matilda_model <- function(x, ...) {
   cat("Matilda model (", x$mode, ")\n", sep = "")
@@ -34,6 +39,12 @@ print.matilda_model <- function(x, ...) {
 #'   \link[MultiAssayExperiment]{MultiAssayExperiment} trained with
 #'   \code{\link{matilda_train}}, or a \code{matilda_model} itself.
 #' @return a \code{matilda_model}, or \code{NULL} if none is stored.
+#' @examples
+#' sce <- matilda_example_sce()
+#' \donttest{
+#'   sce <- matilda_train(sce, label = "cell_type", epochs = 2L)
+#'   matilda_model(sce)
+#' }
 #' @export
 matilda_model <- function(object) {
   if (inherits(object, "matilda_model")) return(object)

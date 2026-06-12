@@ -80,6 +80,12 @@
 #' @param assay,adt_exp,atac_exp assay/altExp selectors.
 #' @param device "auto"/"cpu"/"cuda".
 #' @return \code{x} with \code{colData$matilda_pred}/\code{$matilda_prob}, or a list for matrices.
+#' @examples
+#' sce <- matilda_example_sce()
+#' \donttest{
+#'   sce <- matilda_train(sce, label = "cell_type", epochs = 2L)
+#'   sce <- matilda_classify(sce)
+#' }
 #' @export
 matilda_classify <- function(x, reference = NULL, label = NULL,
                              assay = "counts", adt_exp = "ADT", atac_exp = "ATAC",
@@ -98,6 +104,12 @@ matilda_classify <- function(x, reference = NULL, label = NULL,
 #'
 #' @inheritParams matilda_classify
 #' @return \code{x} with \code{reducedDim "MATILDA"}, or a list for matrices.
+#' @examples
+#' sce <- matilda_example_sce()
+#' \donttest{
+#'   sce <- matilda_train(sce, label = "cell_type", epochs = 2L)
+#'   sce <- matilda_reduce(sce)
+#' }
 #' @export
 matilda_reduce <- function(x, reference = NULL, label = NULL,
                            assay = "counts", adt_exp = "ADT", atac_exp = "ATAC",
@@ -116,6 +128,12 @@ matilda_reduce <- function(x, reference = NULL, label = NULL,
 #' @inheritParams matilda_classify
 #' @param method "IntegratedGradient" (default) or "Saliency".
 #' @return data.frame(celltype, feature, importance).
+#' @examples
+#' sce <- matilda_example_sce()
+#' \donttest{
+#'   sce <- matilda_train(sce, label = "cell_type", epochs = 2L)
+#'   mk <- matilda_markers(sce)
+#' }
 #' @export
 matilda_markers <- function(x, reference = NULL, label = NULL,
                             method = c("IntegratedGradient", "Saliency"),
@@ -139,6 +157,12 @@ matilda_markers <- function(x, reference = NULL, label = NULL,
 #' @param celltype cell-type name to simulate; \code{NULL} = all types.
 #' @param n number of cells to simulate.
 #' @return a SingleCellExperiment of simulated cells.
+#' @examples
+#' sce <- matilda_example_sce()
+#' \donttest{
+#'   sce <- matilda_train(sce, label = "cell_type", epochs = 2L)
+#'   sim <- matilda_simulate(sce, celltype = "A", n = 20L)
+#' }
 #' @export
 matilda_simulate <- function(x, reference = NULL, celltype = NULL, n = 100L, label = NULL,
                              assay = "counts", adt_exp = "ADT", atac_exp = "ATAC",
@@ -169,6 +193,15 @@ matilda_simulate <- function(x, reference = NULL, celltype = NULL, n = 100L, lab
 #' @param outdir directory to copy results into.
 #' @param device "auto"/"cpu"/"cuda".
 #' @return the output directory, invisibly.
+#' @examples
+#' \donttest{
+#'   f <- matilda_example_teaseq()
+#'   m <- matilda_train_files(f["train_rna"], f["train_adt"], f["train_atac"],
+#'                            f["train_cty"], epochs = 2L)
+#'   matilda_task_files(m, f["test_rna"], f["test_adt"], f["test_atac"],
+#'                      f["test_cty"], classification = TRUE, query = TRUE,
+#'                      outdir = tempfile())
+#' }
 #' @export
 matilda_task_files <- function(model, rna, adt = NULL, atac = NULL, cty,
                                classification = FALSE, fs = FALSE, dim_reduce = FALSE,

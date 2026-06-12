@@ -2,9 +2,9 @@
 
 #' Parse per-cell predictions from accuracy_each_cell.txt.
 #'
-#' Upstream line (literal tabs):
-#'   "cell ID:  0 \t \t real cell type: A \t \t predicted cell type: B \t \t probability: 0.77"
-#' When --cty is absent the "real cell type:" field is omitted.
+#' Upstream writes one tab-separated line per cell with fields: cell ID,
+#' real cell type, predicted cell type, probability. When --cty is absent the
+#' "real cell type" field is omitted.
 #'
 #' @return data.frame(cell, real, predicted, prob)
 #' @keywords internal

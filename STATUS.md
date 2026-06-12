@@ -33,7 +33,21 @@ Autonomous build log (updated as work proceeds). Canonical copy on cmri:
 - [x] integration tests PASS (train + classify/reduce/markers/simulate on toy SCE)
 - [x] **TEA-seq end-to-end VALIDATED**: train 12s → classify → **0.8092 query acc** (n=5048)
 - [x] **PARITY PROVEN**: R wrapper 0.8092 == direct-python (same scripts/env/seed) 0.8092
-- [ ] roxygen docs / vignette / BiocCheck (Tasks 16–18) — remaining polish
+- [x] roxygen docs (29 man pages), runnable examples, vignette, NEWS (Tasks 16–17)
+- [x] R CMD check: 1 NOTE only ("Non-staged installation" — required by basilisk, expected)
+- [x] BiocCheck: 1 ERROR + 1 WARNING + 9 NOTES, all non-code:
+      - ERROR `checkSupportReg`: HTTP 502 to bioconductor.org + maintainer not yet
+        registered on the Bioc Support Site → register your email there; not a code defect.
+      - WARNING `checkVigChunkEval`: the matilda_* vignette chunks are eval=FALSE
+        (would build the env at vignette time) — evaluate on a GPU host before submission.
+      - NOTES: line length / 4-space indent / add URL+BugReports when the GitHub repo
+        exists / bioc-devel subscription — all cosmetic or pending the public repo.
+
+## Bottom line
+v1 is FUNCTIONALLY COMPLETE and VALIDATED on real TEA-seq (query acc 0.8092,
+identical to upstream). Remaining before Bioc submission: create the public repo
+(URL/BugReports), register maintainer on the Bioc Support Site, and evaluate the
+vignette on a GPU host. Package builds as `matilda_0.99.0.tar.gz`.
 
 ## Bugs found & fixed during validation (all in the R glue, not the model)
 1. basilisk.utils missing → reticulate bootstrapped pyenv (fixed: installed it).

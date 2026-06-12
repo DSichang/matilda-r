@@ -6,6 +6,11 @@
 #'
 #' @param dir directory holding the demo files; \code{NULL} auto-resolves.
 #' @return a named character vector of the eight file paths.
+#' @examples
+#' demo_dir <- getOption("matilda.demo")  # where the demo is resolved from
+#' \donttest{
+#'   paths <- matilda_example_teaseq()
+#' }
 #' @export
 matilda_example_teaseq <- function(dir = NULL) {
   if (is.null(dir)) {
@@ -25,4 +30,33 @@ matilda_example_teaseq <- function(dir = NULL) {
          ". Set options(matilda.demo=) or MATILDA_DEMO.")
   }
   paths
+}
+
+#' A tiny multimodal SingleCellExperiment for examples and quick trials.
+#'
+#' Builds a small synthetic RNA + ADT + ATAC \link[SingleCellExperiment]{SingleCellExperiment}
+#' with imbalanced cell types, suitable for trying the Matilda workflow.
+#'
+#' @param n_cells number of cells.
+#' @return a SingleCellExperiment with altExps "ADT"/"ATAC" and a colData "cell_type".
+#' @examples
+#' sce <- matilda_example_sce()
+#' sce
+#' @export
+matilda_example_sce <- function(n_cells = 60) {
+  mk <- function(nf, lam, pre) {
+    matrix(stats::rpois(nf * n_cells, lam), nf, n_cells,
+           dimnames = list(paste0(pre, seq_len(nf)), paste0("cell", seq_len(n_cells))))
+  }
+  rna <- mk(50, 5, "gene"); adt <- mk(8, 8, "adt"); atac <- mk(40, 3, "peak")
+  sizes <- c(round(n_cells * 0.5), round(n_cells * 0.33))
+  sizes <- c(sizes, n_cells - sum(sizes))
+  ct <- factor(rep(c("A", "B", "C"), times = sizes))
+  sce <- SingleCellExperiment::SingleCellExperiment(assays = list(counts = rna))
+  SingleCellExperiment::altExp(sce, "ADT") <-
+    SummarizedExperiment::SummarizedExperiment(list(counts = adt))
+  SingleCellExperiment::altExp(sce, "ATAC") <-
+    SummarizedExperiment::SummarizedExperiment(list(counts = atac))
+  SummarizedExperiment::colData(sce)$cell_type <- ct
+  sce
 }

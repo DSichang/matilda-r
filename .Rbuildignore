@@ -5,3 +5,7 @@
 ^LICENSE\.md$
 ^inst/python/matilda/.*/__pycache__$
 ^inst/python/matilda/__pycache__$
+^matilda_r_validation\.rds$
+^run_all\.sh$
+^run[0-9]\.sh$
+^check_env\.R$
