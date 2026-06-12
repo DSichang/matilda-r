@@ -23,7 +23,27 @@
       }
       pkgpy <- normalizePath(pkgpy)
       sys$path$insert(0L, pkgpy)          # resolve `import util`, `from learn... import`
+      oldwd <- os$getcwd()
       os$chdir(maindir)                    # ../trained_model, ../output, real_cty.csv
+      # The vendored scripts open output text files (accuracy_each_*.txt) but
+      # never close them; the long-lived reticulate process therefore leaves
+      # their buffers unflushed (small outputs vanish, large ones lose the final
+      # buffer). Flush every open writable file after the run, and always
+      # restore the cwd (the scripts chdir-relative output would otherwise leave
+      # the process inside a deleted run directory).
+      flush_py <- paste(
+        "import io, gc",
+        "for _o in gc.get_objects():",
+        "    try:",
+        "        if isinstance(_o, io.IOBase) and (not _o.closed) and _o.writable():",
+        "            _o.flush()",
+        "    except Exception:",
+        "        pass",
+        sep = "\n")
+      on.exit({
+        try(reticulate::py_run_string(flush_py), silent = TRUE)
+        try(os$chdir(oldwd), silent = TRUE)
+      }, add = TRUE)
       sys$argv <- c(script, args)
       reticulate::py_run_file(file.path(pkgpy, script), local = FALSE, convert = FALSE)
       invisible(NULL)

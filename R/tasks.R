@@ -44,6 +44,8 @@
 #' @keywords internal
 .write_back_latent <- function(x, L) {
   if (methods::is(x, "SingleCellExperiment")) {
+    # latent rows are in input cell order (task DataLoader uses shuffle=FALSE)
+    rownames(L) <- colnames(x)
     SingleCellExperiment::reducedDim(x, "MATILDA") <- L
     return(x)
   }

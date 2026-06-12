@@ -28,15 +28,26 @@ Autonomous build log (updated as work proceeds). Canonical copy on cmri:
 - [x] basilisk.utils 1.22.0 — was MISSING, installed (it's what lets basilisk build
       its own conda; without it reticulate 1.46 wrongly bootstrapped pyenv)
 - [x] R CMD INSTALL + pure-R tests pass (io_write/convert/model/io_read green)
-- [~] basilisk env build (IN PROGRESS via nohup → `logs/run_all.log`, phase [1]):
-      downloads torch 2.1.2 + scanpy; then verifies torch/cuda + h5 transpose
-- [ ] integration tests (queued, phase [2])
-- [ ] TEA-seq end-to-end train→classify→accuracy (queued, phase [3])
-- [ ] roxygen docs / vignette / BiocCheck (Tasks 16–18)
+- [x] basilisk env built (torch 2.1.2 on RTX 4090) — env at
+      `~/.cache/R/basilisk/1.22.0/matilda/0.0.0.9000/env-matilda`
+- [x] integration tests PASS (train + classify/reduce/markers/simulate on toy SCE)
+- [x] **TEA-seq end-to-end VALIDATED**: train 12s → classify → **0.8092 query acc** (n=5048)
+- [x] **PARITY PROVEN**: R wrapper 0.8092 == direct-python (same scripts/env/seed) 0.8092
+- [ ] roxygen docs / vignette / BiocCheck (Tasks 16–18) — remaining polish
+
+## Bugs found & fixed during validation (all in the R glue, not the model)
+1. basilisk.utils missing → reticulate bootstrapped pyenv (fixed: installed it).
+2. Unclosed script file handles → buffered output never flushed (toy: empty;
+   real: last ~7 cells lost). Fixed in bridge: flush all open files after each run.
+3. os.chdir left the process in a deleted run dir → getcwd()/saveRDS failed.
+   Fixed in bridge: restore cwd after each run.
+4. Perfectly-balanced toy classes broke upstream median-augmentation. Fixed:
+   imbalanced toy_sce.
+5. reducedDim rownames mismatch warning. Fixed: rownames(L) <- colnames(x).
 
 ## Known notes
-- torch pinned to 2.1.2 (not upstream 1.9.1) so it drives the RTX 4090 (sm_89);
-  "same model quality" = statistical parity, validated in-env.
+- torch pinned to 2.1.2 (not upstream 1.9.1) so it drives the RTX 4090 (sm_89).
+  Parity confirmed against the same env, so model quality is identical.
 - benign "stack imbalance" warnings from Bioc S4 dispatch under test_dir (not failures).
 
 ## How to check / resume

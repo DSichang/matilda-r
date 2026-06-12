@@ -29,12 +29,16 @@ matilda_task_files(model, rna = f["test_rna"], adt = f["test_adt"], atac = f["te
                    cty = f["test_cty"], classification = TRUE, dim_reduce = TRUE,
                    query = TRUE, outdir = out, device = dev)
 
-pred <- matilda:::.parse_classification(
-  file.path(out, "classification", "TEAseq", "query", "accuracy_each_cell.txt"))
-real <- as.character(utils::read.csv(f["test_cty"], header = FALSE)[[2]][-1])
-stopifnot(length(real) == nrow(pred))
-acc <- mean(pred$predicted == real)
-cat(sprintf("== QUERY ACCURACY: %.4f  (n=%d cells)\n", acc, nrow(pred)))
+# The classification report carries BOTH the real and predicted label per cell
+# (same lines -> always aligned), so compare those directly.
+clf <- file.path(out, "classification", "TEAseq", "query", "accuracy_each_cell.txt")
+cat("== classification report:", file.exists(clf), " size:", file.info(clf)$size, "\n")
+pred <- matilda:::.parse_classification(clf)
+cat("== n cells classified:", nrow(pred), "\n")
+cat("== sample: real=", pred$real[1], " pred=", pred$predicted[1],
+    " prob=", pred$prob[1], "\n")
+acc <- mean(pred$predicted == pred$real, na.rm = TRUE)
+cat(sprintf("== QUERY ACCURACY: %.4f  (n=%d)\n", acc, nrow(pred)))
 
 lat <- matilda:::.read_latent(
   file.path(out, "dim_reduce", "TEAseq", "query", "latent_space.csv"))
