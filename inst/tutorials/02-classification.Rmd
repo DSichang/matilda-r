@@ -1,0 +1,39 @@
+---
+title: "Matilda tutorial 2 — Classification"
+output: html_document
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+Predict cell types for **query** cells by projecting them onto the trained
+reference latent space.
+
+```{r setup}
+source("_setup.R")
+ref <- if (file.exists("matilda_teaseq_ref.rds")) readRDS("matilda_teaseq_ref.rds") else
+  matilda_train(load_teaseq_sce("train"), label = "cell_type")   # run tutorial 1 to cache
+query <- load_teaseq_sce("test")
+```
+
+## Classify
+
+```{r classify}
+query <- matilda_classify(query, reference = ref)
+head(data.frame(predicted = query$matilda_pred,
+                probability = round(query$matilda_prob, 2)))
+```
+
+```{r accuracy}
+acc <- mean(query$matilda_pred == query$cell_type)
+sprintf("query accuracy = %.4f", acc)
+```
+
+## Performance validation
+
+On TEA-seq this gives **accuracy 0.8092**, **identical** to the original Matilda
+Python implementation run in the same environment (100 % per-cell label
+agreement). Reproduce the head-to-head check with `inst/scripts/parity_check.R`.
+
+Next: [dimension reduction](03-dimension-reduction.Rmd).

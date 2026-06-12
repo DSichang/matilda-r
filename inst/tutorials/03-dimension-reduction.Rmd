@@ -1,0 +1,42 @@
+---
+title: "Matilda tutorial 3 — Dimension reduction"
+output: html_document
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+Encode each cell's RNA + ADT + ATAC features into a single integrated latent
+space, stored in `reducedDim(., "MATILDA")`.
+
+```{r setup}
+source("_setup.R")
+ref <- if (file.exists("matilda_teaseq_ref.rds")) readRDS("matilda_teaseq_ref.rds") else
+  matilda_train(load_teaseq_sce("train"), label = "cell_type")
+```
+
+## Reduce
+
+```{r reduce}
+ref <- matilda_reduce(ref)
+dim(reducedDim(ref, "MATILDA"))
+```
+
+## Visualise
+
+```{r plot, fig.width = 6, fig.height = 5}
+L <- reducedDim(ref, "MATILDA")
+plot(L[, 1], L[, 2], col = factor(ref$cell_type), pch = 16, cex = 0.4,
+     xlab = "latent 1", ylab = "latent 2", main = "Matilda latent space")
+# For a UMAP instead:
+#   ref <- scater::runUMAP(ref, dimred = "MATILDA")
+#   scater::plotUMAP(ref, colour_by = "cell_type")
+```
+
+## Performance validation
+
+The integrated latent space is **bit-identical** to the original Matilda Python
+implementation (max|Δ| = 0). See `inst/scripts/parity_check.R`.
+
+Next: [feature selection](04-feature-selection.Rmd).

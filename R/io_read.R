@@ -39,9 +39,12 @@
                                      importance = numeric()))
   parts <- lapply(fs, function(f) {
     ct <- sub("^fs\\.celltype_(.*)\\.csv$", "\\1", basename(f))
-    d <- utils::read.csv(f, row.names = 1, check.names = FALSE)
-    data.frame(celltype = ct, feature = rownames(d),
-               importance = d[[1]], stringsAsFactors = FALSE)
+    # Feature names can repeat across modalities (e.g. a gene in RNA and in the
+    # ATAC gene-activity), so read the index as a plain column rather than
+    # row.names (which must be unique).
+    d <- utils::read.csv(f, check.names = FALSE)
+    data.frame(celltype = ct, feature = as.character(d[[1]]),
+               importance = d[[2]], stringsAsFactors = FALSE)
   })
   out <- do.call(rbind, parts)
   out[order(out$celltype, -out$importance), , drop = FALSE]

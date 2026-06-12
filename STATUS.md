@@ -43,11 +43,26 @@ Autonomous build log (updated as work proceeds). Canonical copy on cmri:
       - NOTES: line length / 4-space indent / add URL+BugReports when the GitHub repo
         exists / bioc-devel subscription — all cosmetic or pending the public repo.
 
+## Multi-task parity (matildaR vs Matilda Python, same checkpoint/env/seed)
+Verified with `inst/scripts/parity_check.R` on TEA-seq — ALL FOUR tasks identical:
+- classification : 100% identical predictions (acc 0.8092 = 0.8092)
+- dim reduction  : bit-identical (max|Δ| = 0)
+- feature select : bit-identical (max|Δ| = 0, all 11 cell types)
+- simulation     : bit-identical (max|Δ| = 0)
+(parity check also caught a real bug: `.read_markers` must read duplicate feature
+names across modalities as a plain column, not row.names — fixed.)
+
+## Tutorials
+`inst/tutorials/` — one runnable .Rmd per task (01-training … 05-simulation) +
+`_setup.R` (h5→SCE loader) + README. All 5 verified to run end-to-end on real
+TEA-seq. Each has a performance-validation section citing the parity above.
+
 ## Bottom line
-v1 is FUNCTIONALLY COMPLETE and VALIDATED on real TEA-seq (query acc 0.8092,
-identical to upstream). Remaining before Bioc submission: create the public repo
-(URL/BugReports), register maintainer on the Bioc Support Site, and evaluate the
-vignette on a GPU host. Package builds as `matilda_0.99.0.tar.gz`.
+v1 is FUNCTIONALLY COMPLETE and VALIDATED on real TEA-seq — all four tasks
+reproduce the original Matilda Python output bit-for-bit. Remaining before Bioc
+submission: create the public repo (URL/BugReports), register maintainer on the
+Bioc Support Site, evaluate the vignette on a GPU host. Builds as
+`matilda_0.99.0.tar.gz`.
 
 ## Bugs found & fixed during validation (all in the R glue, not the model)
 1. basilisk.utils missing → reticulate bootstrapped pyenv (fixed: installed it).

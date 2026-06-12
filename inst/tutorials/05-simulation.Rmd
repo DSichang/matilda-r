@@ -1,0 +1,32 @@
+---
+title: "Matilda tutorial 5 — Data simulation"
+output: html_document
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+Generate synthetic multimodal cells from the trained VAE decoders — useful for
+augmenting rare populations or building balanced references.
+
+```{r setup}
+source("_setup.R")
+ref <- if (file.exists("matilda_teaseq_ref.rds")) readRDS("matilda_teaseq_ref.rds") else
+  matilda_train(load_teaseq_sce("train"), label = "cell_type")
+```
+
+## Simulate
+
+```{r simulate}
+sim <- matilda_simulate(ref, celltype = "B.Naive", n = 200)
+sim                       # a SingleCellExperiment of simulated cells
+table(sim$label)
+```
+
+Use `celltype = NULL` (or `-1`) to simulate every cell type at once.
+
+## Performance validation
+
+Simulated values are **bit-identical** to the original Matilda Python
+implementation (max|Δ| = 0). See `inst/scripts/parity_check.R`.
