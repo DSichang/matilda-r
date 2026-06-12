@@ -1,7 +1,9 @@
 skip_if_no_matilda_env <- function() {
+  # Gate on an explicit opt-in so pure-R test runs never trigger the (slow)
+  # basilisk env build. Set MATILDA_RUN_INTEGRATION=1 to run integration tests.
   testthat::skip_if_not(
-    isTRUE(tryCatch(matilda:::.have_env(), error = function(e) FALSE)),
-    "basilisk matilda env not available"
+    nzchar(Sys.getenv("MATILDA_RUN_INTEGRATION")),
+    "integration tests off (set MATILDA_RUN_INTEGRATION=1)"
   )
 }
 

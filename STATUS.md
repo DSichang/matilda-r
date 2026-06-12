@@ -23,12 +23,21 @@ Autonomous build log (updated as work proceeds). Canonical copy on cmri:
       `matilda_markers` / `matilda_simulate` + `*_files` path APIs
 - [x] tests: pure-R (io/convert/model/io_read) + integration (bridge/train/tasks)
 - [x] real-data validation harness `inst/scripts/validate_vs_python.R`
-- [ ] deps install on cmri (running via nohup → `logs/deps_install.log`)
-- [ ] HDF5Array (chained → `logs/hdf5array.log`)
-- [ ] R CMD INSTALL + pure-R tests pass
-- [ ] basilisk env build (first use) + integration tests
-- [ ] TEA-seq end-to-end validation (nohup → `logs/validate.log`)
+- [x] deps install on cmri (DONE — Bioc stack + devtools/roxygen2/BiocCheck)
+- [x] HDF5Array 1.38.0 (DONE)
+- [x] basilisk.utils 1.22.0 — was MISSING, installed (it's what lets basilisk build
+      its own conda; without it reticulate 1.46 wrongly bootstrapped pyenv)
+- [x] R CMD INSTALL + pure-R tests pass (io_write/convert/model/io_read green)
+- [~] basilisk env build (IN PROGRESS via nohup → `logs/run_all.log`, phase [1]):
+      downloads torch 2.1.2 + scanpy; then verifies torch/cuda + h5 transpose
+- [ ] integration tests (queued, phase [2])
+- [ ] TEA-seq end-to-end train→classify→accuracy (queued, phase [3])
 - [ ] roxygen docs / vignette / BiocCheck (Tasks 16–18)
+
+## Known notes
+- torch pinned to 2.1.2 (not upstream 1.9.1) so it drives the RTX 4090 (sm_89);
+  "same model quality" = statistical parity, validated in-env.
+- benign "stack imbalance" warnings from Bioc S4 dispatch under test_dir (not failures).
 
 ## How to check / resume
 ```bash
