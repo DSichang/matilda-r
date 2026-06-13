@@ -9,7 +9,7 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 
 Before training, your data has to be in a shape Matilda accepts. This tutorial
 shows the **input contract** and how to reach it from the formats people usually
-start with (`.h5ad`, `.h5mu`, 10x `.h5`, Seurat, plain matrices, Matilda `.h5`).
+start with (`.h5ad`, 10x `.h5`, Seurat, plain matrices, Matilda `.h5`).
 
 ## What Matilda expects
 
