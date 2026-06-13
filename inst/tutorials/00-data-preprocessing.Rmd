@@ -65,20 +65,6 @@ rna$cell_type <- colData(rna)$cell_type          # your label column
 sce <- rna
 ```
 
-## From `.h5mu` (MuData — multimodal AnnData)
-
-A `.h5mu` already bundles the modalities. Read it as a `MultiAssayExperiment`,
-which Matilda accepts directly (select experiments with `assay=`/`adt_exp=`/`atac_exp=`):
-
-```{r h5mu, eval = FALSE}
-# BiocManager::install("MuData")
-library(MuData)
-mae <- readH5MU("data.h5mu")
-names(mae)                                        # e.g. "rna", "adt", "atac"
-fit <- matilda_train(mae, label = "cell_type",
-                     assay = "rna", adt_exp = "adt", atac_exp = "atac")
-```
-
 ## From 10x CellRanger `.h5` (CITE-seq / multiome)
 
 ```{r tenx, eval = FALSE}
