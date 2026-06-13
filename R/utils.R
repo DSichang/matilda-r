@@ -14,7 +14,7 @@
   if (has_adt && has_atac) "TEAseq"
   else if (!has_adt && has_atac) "SHAREseq"
   else if (has_adt && !has_atac) "CITEseq"
-  else "RNAseq"
+  else "rna_only"
 }
 
 #' Number of cells in any supported input.

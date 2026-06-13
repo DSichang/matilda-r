@@ -99,18 +99,29 @@ matilda_train_files <- function(rna, adt = NULL, atac = NULL, cty,
             if (!is.null(atac)) c("--atac", atac),
             "--batch_size", batch_size, "--epochs", epochs, "--lr", lr,
             "--z_dim", z_dim, "--hidden_rna", hidden_rna,
-            "--hidden_adt", hidden_adt, "--hidden_atac", hidden_atac,
+            # the RNA-only script doesn't define --hidden_adt/--hidden_atac, so
+            # only pass them when that modality is present.
+            if (!is.null(adt))  c("--hidden_adt",  hidden_adt),
+            if (!is.null(atac)) c("--hidden_atac", hidden_atac),
             "--seed", seed)
   # upstream argparse type=bool: any non-empty string is True, "" is False.
   if (!augmentation) args <- c(args, "--augmentation", "")
   .matilda_run(script, as.character(args), rundir, device = device)
 
-  mode <- if (rna_only) "RNAseq" else .mode_of(!is.null(adt), !is.null(atac))
+  mode <- .mode_of(!is.null(adt), !is.null(atac))
   ckf <- file.path(rundir, "trained_model", mode, "model_best.pth.tar")
   if (!file.exists(ckf)) stop("Training produced no checkpoint at ", ckf)
   ck <- readBin(ckf, "raw", n = file.info(ckf)$size)
-  levels <- as.character(utils::read.csv(file.path(rundir, "main", "real_cty.csv"),
-                                         header = FALSE)[[1]])
+  real_cty <- file.path(rundir, "main", "real_cty.csv")
+  if (file.exists(real_cty)) {
+    levels <- as.character(utils::read.csv(real_cty, header = FALSE)[[1]])
+  } else {
+    # The RNA-only train script does not emit real_cty.csv. Derive the same
+    # ordering read_fs_label uses: pd.Categorical sorts unique labels
+    # lexicographically (byte order) -> radix sort, locale-independent.
+    lab <- as.character(utils::read.csv(cty, header = FALSE)[[2]])[-1]
+    levels <- sort(unique(lab), method = "radix")
+  }
   feats <- list(rna  = .h5_features(rna),
                 adt  = if (!is.null(adt))  .h5_features(adt)  else NULL,
                 atac = if (!is.null(atac)) .h5_features(atac) else NULL)

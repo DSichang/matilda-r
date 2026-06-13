@@ -18,9 +18,10 @@
             if (!is.null(mods$atac)) c("--atac", pth("atac")),
             if (query) c("--query", "True"),
             "--z_dim", model$dims$z_dim, "--hidden_rna", model$dims$hidden_rna,
-            "--hidden_adt", model$dims$hidden_adt, "--hidden_atac", model$dims$hidden_atac,
+            if (!is.null(model$dims$nfeatures_adt))  c("--hidden_adt",  model$dims$hidden_adt),
+            if (!is.null(model$dims$nfeatures_atac)) c("--hidden_atac", model$dims$hidden_atac),
             "--seed", model$hyper$seed, flags)
-  script <- if (model$mode == "RNAseq") "main_matilda_rna_task.py" else "main_matilda_task.py"
+  script <- if (model$mode == "rna_only") "main_matilda_rna_task.py" else "main_matilda_task.py"
   .matilda_run(script, as.character(args), rundir, device = device)
   list(rundir = rundir, out = file.path(rundir, "output"),
        sub = if (query) "query" else "reference")
@@ -222,9 +223,10 @@ matilda_task_files <- function(model, rna, adt = NULL, atac = NULL, cty,
                               "--simulation_num", as.character(as.integer(simulation_num))),
             if (query) c("--query", "True"),
             "--z_dim", model$dims$z_dim, "--hidden_rna", model$dims$hidden_rna,
-            "--hidden_adt", model$dims$hidden_adt, "--hidden_atac", model$dims$hidden_atac,
+            if (!is.null(model$dims$nfeatures_adt))  c("--hidden_adt",  model$dims$hidden_adt),
+            if (!is.null(model$dims$nfeatures_atac)) c("--hidden_atac", model$dims$hidden_atac),
             "--seed", model$hyper$seed)
-  script <- if (model$mode == "RNAseq") "main_matilda_rna_task.py" else "main_matilda_task.py"
+  script <- if (model$mode == "rna_only") "main_matilda_rna_task.py" else "main_matilda_task.py"
   .matilda_run(script, as.character(args), rundir, device = device)
   dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
   files <- list.files(file.path(rundir, "output"), full.names = TRUE)

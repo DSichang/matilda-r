@@ -9,9 +9,13 @@
 #' @keywords internal
 .stage_rundir <- function() {
   rd <- tempfile("matilda_run_")
-  for (d in c("main", "trained_model", "output", "data")) {
-    dir.create(file.path(rd, d), recursive = TRUE, showWarnings = FALSE)
-  }
+  # Pre-create the per-mode trained_model subdirs: the upstream RNA-only train
+  # script hardcodes a torch.save() to ../trained_model/RNAseq/ that it never
+  # mkdir's, so it would crash without this.
+  dirs <- c("main", "output", "data",
+            file.path("trained_model",
+                      c("TEAseq", "CITEseq", "SHAREseq", "rna_only", "RNAseq")))
+  for (d in dirs) dir.create(file.path(rd, d), recursive = TRUE, showWarnings = FALSE)
   rd
 }
 
