@@ -5,6 +5,7 @@ validate that the result matches the original Matilda Python implementation.
 
 | # | File | Task |
 |---|------|------|
+| 0 | `00-data-preprocessing.Rmd`  | Get your data into an accepted format (h5ad / h5mu / 10x h5 / Seurat / matrices) |
 | 1 | `01-training.Rmd`            | Train the multimodal VAE + classifier |
 | 2 | `02-classification.Rmd`     | Predict cell types for query cells |
 | 3 | `03-dimension-reduction.Rmd`| Integrated multimodal latent space |

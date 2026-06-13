@@ -1,0 +1,167 @@
+---
+title: "Matilda tutorial 0 — Preparing your data"
+output: html_document
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+Before training, your data has to be in a shape Matilda accepts. This tutorial
+shows the **input contract** and how to reach it from the formats people usually
+start with (`.h5ad`, `.h5mu`, 10x `.h5`, Seurat, plain matrices, Matilda `.h5`).
+
+## What Matilda expects
+
+The primary input is a **`SingleCellExperiment`** (Matilda also accepts
+`MultiAssayExperiment`, `Seurat`, or plain matrices):
+
+- **RNA** in the main assay — **raw counts**.
+- **ADT** in `altExp(sce, "ADT")` — **raw counts** (optional).
+- **ATAC** in `altExp(sce, "ATAC")` — **gene-activity score**, gene-level (optional).
+- **cell-type labels** in a `colData` column, e.g. `sce$cell_type`.
+- every modality shares the **same cells (columns), in the same order**.
+- assays are oriented **features × cells** (genes in rows).
+
+(RNA + at least one of ADT/ATAC = multimodal; RNA-only also works.)
+
+```{r target}
+source("_setup.R")
+sce <- matilda_example_sce()      # <- this is the shape you are aiming for
+sce
+SummarizedExperiment::assayNames(sce)
+SingleCellExperiment::altExpNames(sce)
+head(sce$cell_type)
+```
+
+> **Data semantics matter:** RNA/ADT must be **raw counts** (not log/normalised),
+> and ATAC must be a **gene-activity score** (e.g. `Signac::GeneActivity()`), *not*
+> raw peak counts. Matilda does its own library-size + log2 + z-score internally.
+
+## From `.h5ad` (AnnData / scanpy)
+
+One modality per file → read each with `zellkonverter`, then assemble. (`readH5AD`
+returns a genes × cells SCE, transposing AnnData's cells × genes for you.)
+
+```{r h5ad, eval = FALSE}
+# BiocManager::install("zellkonverter")
+library(zellkonverter); library(SingleCellExperiment)
+
+rna  <- readH5AD("rna.h5ad")
+adt  <- readH5AD("adt.h5ad")
+atac <- readH5AD("atac_geneactivity.h5ad")
+
+# Make sure the RAW COUNTS are the main assay named "counts"
+# (readH5AD puts AnnData's X in assay "X"; raw counts may be in a layer):
+assayNames(rna)                                  # inspect first
+assay(rna, "counts") <- assay(rna, "X")          # or assay(rna, "<your raw layer>")
+
+# Align cells across modalities, then attach ADT/ATAC as altExps:
+common <- Reduce(intersect, list(colnames(rna), colnames(adt), colnames(atac)))
+rna  <- rna[, common]; adt <- adt[, common]; atac <- atac[, common]
+altExp(rna, "ADT")  <- adt
+altExp(rna, "ATAC") <- atac
+rna$cell_type <- colData(rna)$cell_type          # your label column
+sce <- rna
+```
+
+## From `.h5mu` (MuData — multimodal AnnData)
+
+A `.h5mu` already bundles the modalities. Read it as a `MultiAssayExperiment`,
+which Matilda accepts directly (select experiments with `assay=`/`adt_exp=`/`atac_exp=`):
+
+```{r h5mu, eval = FALSE}
+# BiocManager::install("MuData")
+library(MuData)
+mae <- readH5MU("data.h5mu")
+names(mae)                                        # e.g. "rna", "adt", "atac"
+fit <- matilda_train(mae, label = "cell_type",
+                     assay = "rna", adt_exp = "adt", atac_exp = "atac")
+```
+
+## From 10x CellRanger `.h5` (CITE-seq / multiome)
+
+```{r tenx, eval = FALSE}
+# BiocManager::install("DropletUtils")
+library(DropletUtils); library(SingleCellExperiment)
+sce <- read10xCounts("filtered_feature_bc_matrix.h5", col.names = TRUE)
+table(rowData(sce)$Type)                          # "Gene Expression"/"Antibody Capture"/"Peaks"
+
+sce <- splitAltExps(sce, rowData(sce)$Type, ref = "Gene Expression")  # RNA -> main
+altExpNames(sce)[altExpNames(sce) == "Antibody Capture"] <- "ADT"
+assayNames(sce)[1] <- "counts"
+sce$cell_type <- my_labels                        # supply your annotation
+```
+
+⚠️ **10x multiome ATAC is *peaks*, but Matilda needs a *gene-activity score*.**
+Convert peaks → gene activity first (Signac), then attach:
+
+```{r geneact, eval = FALSE}
+# library(Signac); library(Seurat)
+ga <- GeneActivity(seurat_atac_object)            # peaks -> gene-level activity
+altExp(sce, "ATAC") <- SingleCellExperiment(list(counts = ga[, colnames(sce)]))
+```
+
+## From a Seurat object
+
+```{r seurat, eval = FALSE}
+library(Seurat); library(SingleCellExperiment)
+sce <- as.SingleCellExperiment(seurat_obj)        # active assay -> main
+# attach the other modalities (raw counts; ATAC as gene activity):
+altExp(sce, "ADT")  <- SingleCellExperiment(list(counts = GetAssayData(seurat_obj, "ADT",  "counts")))
+altExp(sce, "ATAC") <- SingleCellExperiment(list(counts = GetAssayData(seurat_obj, "ATAC", "counts")))
+sce$cell_type <- seurat_obj$cell_type
+```
+
+(Matilda also takes a `Seurat` object directly once ADT/ATAC are altExps.)
+
+## From plain matrices (no SCE needed)
+
+The simplest path — pass genes × cells matrices and a label vector aligned to columns:
+
+```{r matrices, eval = FALSE}
+fit <- matilda_train(rna = rna_mat, adt = adt_mat, atac = atac_mat, cty = labels)
+```
+
+## From Matilda's own `.h5` (`matrix/data`, `matrix/features`, `matrix/barcodes`)
+
+```{r matildah5, eval = FALSE}
+source("_setup.R")                                # provides read_matilda_h5()
+rna_mat <- read_matilda_h5("train_rna.h5")        # -> genes × cells matrix
+```
+
+## Preprocessing checklist
+
+1. **Counts, not normalised** — RNA/ADT raw counts; ATAC gene-activity score.
+2. **QC filter** — drop empty/low-count cells and genes detected in very few cells
+   (e.g. < 1% of cells) in each modality.
+3. **One cell set** — identical cells, same column order, across all modalities.
+4. **Labels** — a `colData` cell-type column (needed for training, markers, simulation).
+5. **Train vs query features must match** — the query must use the training feature
+   set. Either intersect to shared features, or align the query to the training
+   features and zero-fill the missing ones:
+
+```{r align, eval = FALSE}
+aligned <- matrix(0, nrow(train_rna), ncol(query_rna),
+                  dimnames = list(rownames(train_rna), colnames(query_rna)))
+shared <- intersect(rownames(train_rna), rownames(query_rna))
+aligned[shared, ] <- query_rna[shared, ]
+query_rna <- aligned
+```
+
+## Sanity-check before training
+
+```{r check}
+check_matilda_input <- function(sce, label = "cell_type") {
+  stopifnot(methods::is(sce, "SingleCellExperiment"))
+  stopifnot(label %in% colnames(SummarizedExperiment::colData(sce)))
+  aes <- SingleCellExperiment::altExps(sce)
+  stopifnot(all(vapply(aes, function(a) ncol(a) == ncol(sce), logical(1))))
+  message("OK: ", ncol(sce), " cells, RNA ", nrow(sce), " features; altExps: ",
+          paste(SingleCellExperiment::altExpNames(sce), collapse = ", "))
+  invisible(TRUE)
+}
+check_matilda_input(matilda_example_sce())
+```
+
+Once this passes, continue to [training](01-training.Rmd).
