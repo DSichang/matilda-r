@@ -1,42 +1,33 @@
-# matilda tutorials
+# matilda tutorial
 
-Runnable, per-task tutorials that reproduce every Matilda function from R and
-validate that the result matches the original Matilda Python implementation.
+**`matilda-tutorial.Rmd`** — a single, end-to-end walkthrough:
 
-| # | File | Task |
-|---|------|------|
-| 0 | `00-data-preprocessing.Rmd`  | Get your data into an accepted format (h5ad / 10x h5 / Seurat / matrices) |
-| 1 | `01-training.Rmd`            | Train the multimodal VAE + classifier |
-| 2 | `02-classification.Rmd`     | Predict cell types for query cells |
-| 3 | `03-dimension-reduction.Rmd`| Integrated multimodal latent space |
-| 4 | `04-feature-selection.Rmd`  | Per-cell-type marker importance |
-| 5 | `05-simulation.Rmd`         | Generate synthetic cells |
-
-`_setup.R` holds shared helpers (`load_teaseq_sce()`); each tutorial sources it.
+1. **Load your data** into a `SingleCellExperiment`, shown explicitly for every
+   common format — native Matilda `.h5` (via `rhdf5`), a `Seurat` object, `.h5ad`
+   (AnnData/scanpy, via `zellkonverter`), or plain matrices. The loaders are
+   verified to give the *same* data, so downstream results don't depend on format.
+2. **Run the whole workflow** — `matilda_train` → `matilda_reduce` →
+   `matilda_classify` → `matilda_markers` → `matilda_simulate`, plus query
+   classification.
 
 ## Requirements
-- The `matilda` package installed.
-- The TEA-seq demo data — `matilda_example_teaseq()` resolves it; otherwise set
-  `options(matilda.demo = "/path/to/TEAseq")` or the `MATILDA_DEMO` env var.
-- The first call builds the bundled Python environment (one-off); a GPU is used
-  if present, otherwise CPU.
+- the `matilda` package (Python is provisioned automatically by basilisk);
+- the TEA-seq demo data — point the tutorial at it with
+  `options(matilda.demo = "...", matilda.demo_formats = "...")` (the Rmd has
+  sensible defaults), or edit the two paths near the top;
+- `Seurat` and `zellkonverter` for the Seurat / `.h5ad` loading options.
 
 ## Run
-From this directory, knit any tutorial, e.g.
 ```r
-rmarkdown::render("01-training.Rmd")
+rmarkdown::render("matilda-tutorial.Rmd")
 ```
-Run `01-training.Rmd` first — it caches the trained model to
-`matilda_teaseq_ref.rds`, which tutorials 2–5 reuse (they retrain automatically
-if it is missing).
+Takes a few minutes on a CPU laptop, seconds on a GPU.
 
-## Reproduce the parity check
-`inst/scripts/parity_check.R` runs matilda (R) and the original Matilda Python on
-the **same checkpoint** and reports the per-task difference. Confirmed on TEA-seq:
-
-| Task | matildaR vs Matilda Python |
-|------|----------------------------|
-| Classification | identical predictions (accuracy 0.8092 = 0.8092) |
-| Dimension reduction | bit-identical (max\|Δ\| = 0) |
-| Feature selection | bit-identical (max\|Δ\| = 0, all cell types) |
-| Simulation | bit-identical (max\|Δ\| = 0) |
+## Reproducibility note
+The R wrapper reproduces the original Matilda Python **exactly on the same
+hardware** (verified bit-identical on GPU; see `inst/scripts/parity_check.R`).
+Exact figures differ slightly between GPU and CPU (a floating-point property of
+PyTorch, not the wrapper), so the accuracy you see on a CPU laptop will be very
+close to — but not identical to — the GPU number. The tutorial computes and
+prints the accuracy on your machine.
+```
