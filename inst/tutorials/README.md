@@ -6,16 +6,21 @@
    common format — native Matilda `.h5` (via `rhdf5`), a `Seurat` object, `.h5ad`
    (AnnData/scanpy, via `zellkonverter`), or plain matrices. The loaders are
    verified to give the *same* data, so downstream results don't depend on format.
-2. **Run the whole workflow** — `matilda_train` → `matilda_reduce` →
-   `matilda_classify` → `matilda_markers` → `matilda_simulate`, plus query
-   classification.
+2. **Run the workflow**, with task sections mirroring the official Python tutorial
+   one-to-one (each R call annotated with the Python CLI flag it runs):
+   - **Train** (`matilda_train`);
+   - **Multi-task on the training data** — simulation, dimension reduction,
+     feature selection (`matilda_simulate` / `matilda_reduce` / `matilda_markers`);
+   - **Multi-task on the query data** — classification, dimension reduction,
+     feature selection (the same verbs with `reference =`, i.e. `--query True`).
 
 ## Requirements
 - the `matilda` package (Python is provisioned automatically by basilisk);
 - the TEA-seq demo data — point the tutorial at it with
   `options(matilda.demo = "...", matilda.demo_formats = "...")` (the Rmd has
   sensible defaults), or edit the two paths near the top;
-- `Seurat` and `zellkonverter` for the Seurat / `.h5ad` loading options.
+- `Seurat` and `zellkonverter` for the Seurat / `.h5ad` loading options;
+  `scater` for the UMAP plot.
 
 ## Run
 ```r
