@@ -21,9 +21,9 @@ loading is shown explicitly, because the point is to show you *how to run your o
 
 ## Requirements
 
-- **R packages**: `matilda`, `SingleCellExperiment` (always); `Seurat` /
-  `zellkonverter` for the Seurat / `.h5ad` loading options and `scater` for the
-  UMAP plot (those chunks skip themselves if the package is missing).
+- **R packages**: `matilda`, `SingleCellExperiment` (always); `Seurat` (the
+  `.rds` loading option and the latent-space UMAP) and `zellkonverter` (the
+  `.h5ad` loading option) — those chunks skip themselves if the package is missing.
 - **Python**: nothing to install — `matilda` provisions a private environment via
   `basilisk` on the **first `matilda_train()` call** (a one-off multi-minute build,
   cached afterwards; a GPU is used if present, otherwise CPU).
@@ -174,9 +174,22 @@ sce <- matilda_reduce(sce)                 # adds reducedDim(sce, "MATILDA")
 dim(reducedDim(sce, "MATILDA"))            # cells x z_dim (100)
 ```
 
-```{r umap-train, fig.width = 6, fig.height = 5, eval = requireNamespace("scater", quietly = TRUE)}
-sce <- scater::runUMAP(sce, dimred = "MATILDA")
-scater::plotUMAP(sce, colour_by = "cell_type")
+The official `qc/visulize_latent_space.Rmd` visualises this latent space by
+building a Seurat object from it, running PCA, and taking a UMAP of the first 10
+PCs. We reproduce that pipeline exactly (Seurat's `RunPCA`/`RunUMAP` use
+`seed.use = 42` internally, so the layout is reproducible):
+
+```{r umap-train, fig.width = 6, fig.height = 5, eval = requireNamespace("Seurat", quietly = TRUE)}
+L <- as(t(reducedDim(sce, "MATILDA")), "CsparseMatrix")    # latent dims x cells
+rownames(L) <- paste0("z", seq_len(nrow(L))); colnames(L) <- colnames(sce)
+seu_umap <- Seurat::CreateSeuratObject(counts = L)
+seu_umap[["RNA"]]$data <- seu_umap[["RNA"]]$counts          # latent as data (no normalization)
+seu_umap$celltype <- sce$cell_type
+seu_umap <- Seurat::FindVariableFeatures(seu_umap, verbose = FALSE)
+seu_umap <- Seurat::ScaleData(seu_umap, verbose = FALSE)
+seu_umap <- Seurat::RunPCA(seu_umap, verbose = FALSE)
+seu_umap <- Seurat::RunUMAP(seu_umap, dims = 1:10, verbose = FALSE)
+Seurat::DimPlot(seu_umap, reduction = "umap", group.by = "celltype")
 ```
 
 ## Feature selection — `--fs True`
@@ -217,21 +230,6 @@ dim(reducedDim(query, "MATILDA"))
 qmarkers <- matilda_markers(query, reference = sce)
 head(qmarkers)
 ```
-
-# 6. Reproducibility
-
-The R wrapper runs Matilda's **unchanged** Python, so it reproduces the original
-exactly **on the same hardware**. Verified bit-identical to the original Matilda
-Python (same env + seed) across all tasks — classification, dimension reduction,
-feature selection, simulation — with `max|Δ| = 0`: on a **GPU**, query accuracy
-**0.8092**; on a **CPU**, R and Python agree exactly too (both **0.8148**).
-Reproduce with `inst/scripts/parity_check.R`.
-
-So the accuracy printed in section 5 is **this machine's run** (≈ 0.81 on a CPU
-laptop); the reference GPU figure is 0.8092. The small gap is GPU-vs-CPU
-floating-point — a property of PyTorch, not of this wrapper. Results are also
-identical regardless of **input format**, since Options A–C load the same data
-(the equivalence checks in section 2 are all `TRUE`).
 
 ```{r sessioninfo}
 sessionInfo()
