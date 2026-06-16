@@ -7,8 +7,8 @@
 #    stable nn / DataLoader / optim APIs, so a newer torch runs it unchanged.
 #  * torch from PyPI ships CUDA and falls back to CPU when no GPU is present, so a
 #    single pin gives GPU on capable hosts (cmri) and CPU elsewhere (Bioc build
-#    machines). "Same model quality" is validated as statistical parity in the
-#    SAME env (see inst/scripts/validate_vs_python.R).
+#    machines). "Same model quality" is validated as bit-identical parity in the
+#    SAME env (see inst/scripts/parity_check.R).
 
 #' @importFrom basilisk BasiliskEnvironment
 matilda_env <- basilisk::BasiliskEnvironment(

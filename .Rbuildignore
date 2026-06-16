@@ -4,6 +4,5 @@
 ^\.github$
 ^\.DS_Store$
 ^.*/\.DS_Store$
-^STATUS\.md$
 ^inst/python/matilda/.*/__pycache__$
 ^inst/python/matilda/__pycache__$
