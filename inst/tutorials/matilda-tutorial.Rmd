@@ -179,7 +179,7 @@ building a Seurat object from it, running PCA, and taking a UMAP of the first 10
 PCs. We reproduce that pipeline exactly (Seurat's `RunPCA`/`RunUMAP` use
 `seed.use = 42` internally, so the layout is reproducible):
 
-```{r umap-train, fig.width = 6, fig.height = 5, eval = requireNamespace("Seurat", quietly = TRUE)}
+```{r umap-train, fig.width = 8, fig.height = 5, eval = requireNamespace("Seurat", quietly = TRUE)}
 L <- as(t(reducedDim(sce, "MATILDA")), "CsparseMatrix")    # latent dims x cells
 rownames(L) <- paste0("z", seq_len(nrow(L))); colnames(L) <- colnames(sce)
 seu_umap <- Seurat::CreateSeuratObject(counts = L)
