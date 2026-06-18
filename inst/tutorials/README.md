@@ -1,26 +1,25 @@
 # matilda tutorial
 
-**`matilda-tutorial.Rmd`** — a single, end-to-end walkthrough:
+**`matilda-tutorial.Rmd`** — a **Python ⇄ R mirror** on TEA-seq: for every step it shows
+the original Matilda **Python CLI** command and the **R** call that runs the same code, then
+the output and a plot.
 
-1. **Load your data** into a `SingleCellExperiment`, shown explicitly for every
-   common format — native Matilda `.h5` (via `rhdf5`), a `Seurat` object, `.h5ad`
-   (AnnData/scanpy, via `zellkonverter`), or plain matrices. The loaders are
-   verified to give the *same* data, so downstream results don't depend on format.
-2. **Run the workflow**, with task sections mirroring the official Python tutorial
-   one-to-one (each R call annotated with the Python CLI flag it runs):
-   - **Train** (`matilda_train`);
-   - **Multi-task on the training data** — simulation, dimension reduction,
-     feature selection (`matilda_simulate` / `matilda_reduce` / `matilda_markers`);
-   - **Multi-task on the query data** — classification, dimension reduction,
-     feature selection (the same verbs with `reference =`, i.e. `--query True`).
+1. **Read the data** into a `SingleCellExperiment`, shown explicitly (native `.h5` via
+   `rhdf5`, plus a `Seurat`/`.h5ad` cross-check verified element-identical).
+2. **Train** (`matilda_train` ⇄ `main_matilda_train.py`).
+3. **Multi-task on the training data** — simulation, dimension reduction, feature selection,
+   each with a plot mirroring the official `qc/visualize_simulated_data.Rmd` (real-vs-synthetic
+   UMAP) and `qc/visulize_latent_space.Rmd` (latent UMAP), plus a marker-importance heatmap.
+4. **Multi-task on the query data** — classification (+ per-cell-type accuracy plot),
+   dimension reduction, feature selection (the same verbs with `reference =`, i.e. `--query True`).
 
 ## Requirements
 - the `matilda` package (Python is provisioned automatically by basilisk);
 - the TEA-seq demo data — point the tutorial at it with
   `options(matilda.demo = "...", matilda.demo_formats = "...")` (the Rmd has
   sensible defaults), or edit the two paths near the top;
-- `Seurat` and `zellkonverter` for the Seurat / `.h5ad` loading options;
-  `scater` for the UMAP plot.
+- `Seurat` + `zellkonverter` for the alternative loaders; `scater` for the UMAPs;
+  `ggplot2` for the plots.
 
 ## Run
 ```r

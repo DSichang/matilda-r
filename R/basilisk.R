@@ -29,10 +29,3 @@ matilda_env <- basilisk::BasiliskEnvironment(
     "tqdm==4.66.1"
   )
 )
-
-#' Is the basilisk matilda environment available (built or buildable)?
-#' @keywords internal
-.have_env <- function() {
-  tryCatch({ basilisk::obtainEnvironmentPath(matilda_env); TRUE },
-           error = function(e) FALSE)
-}
