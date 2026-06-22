@@ -1,6 +1,11 @@
 ---
 title: "Matilda on TEA-seq: a Python ⇄ R mirror (data → tasks → plots)"
-output: html_document
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    number_sections: false
 ---
 
 ```{r setup, include = FALSE}
