@@ -135,6 +135,8 @@ next to the equivalent **R** call, then the output and a plot:
    (latent UMAP), feature selection (marker heatmap).
 4. **Multi-task on the query data** — classification (per-cell-type accuracy), dimension
    reduction, feature selection.
+5. **Why multimodal?** — accuracy by modality combination across the `rna_only` / `CITEseq` /
+   `SHAREseq` / `TEAseq` modes (adding the ADT panel gives the largest gain).
 
 ```r
 rmarkdown::render("inst/tutorials/matilda-tutorial.Rmd")

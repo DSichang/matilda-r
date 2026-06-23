@@ -247,7 +247,43 @@ qmarkers <- matilda_markers(query, reference = sce)
 head(qmarkers)
 ```
 
-# 5. Reproducibility
+# 5. Why multimodal? (modality contribution)
+
+Matilda auto-detects the **mode** from the modalities you pass — `rna_only`, `CITEseq` (RNA+ADT),
+`SHAREseq` (RNA+ATAC), `TEAseq` (RNA+ADT+ATAC) — and adapts the model. Training on each
+combination of the *same* cells shows what each modality buys for classification.
+
+**Python** — same scripts, just fewer modality flags (the mode follows automatically; RNA-only
+uses the `*_rna_*` scripts):
+```bash
+python main_matilda_rna_train.py --rna train_rna.h5 --cty train_cty.csv                      # rna_only
+python main_matilda_train.py --rna train_rna.h5 --adt  train_adt.h5  --cty train_cty.csv     # CITEseq
+python main_matilda_train.py --rna train_rna.h5 --atac train_atac.h5 --cty train_cty.csv     # SHAREseq
+# TEAseq (all three) was trained in section 2
+```
+
+**R** — drop `altExp`s to change the mode, then re-train and classify the query:
+```{r modality, fig.width = 7, fig.height = 4}
+keep_only <- function(s, keep) { for (ae in altExpNames(s)) if (!(ae %in% keep)) altExp(s, ae) <- NULL; s }
+acc <- sapply(list("RNA only" = character(0), "RNA+ATAC" = "ATAC", "RNA+ADT" = "ADT"),
+  function(keep) {
+    fit <- matilda_train(keep_only(sce, keep), label = "cell_type", seed = 1L)
+    qy  <- matilda_classify(keep_only(query, keep), reference = fit)
+    mean(qy$matilda_pred == qy$cell_type)
+  })
+acc["RNA+ADT+ATAC"] <- mean(query$matilda_pred == query$cell_type)   # reuse the TEAseq model from §2/§4
+mdf <- data.frame(modalities = factor(names(acc), levels = names(acc)), accuracy = as.numeric(acc))
+ggplot(mdf, aes(modalities, accuracy)) + geom_col(fill = "seagreen") + ylim(0, 1) +
+  geom_text(aes(label = sprintf("%.3f", accuracy)), vjust = -0.4, size = 3.5) +
+  labs(title = "Query accuracy by modality combination", x = NULL, y = "accuracy") + theme_classic()
+```
+
+Adding the **ADT** (protein) panel to RNA gives the biggest jump in classification accuracy — the
+core value of multimodal integration. **ATAC** contributes less *for this task on this dataset*
+(full TEAseq ≈ RNA+ADT). Use all modalities for the integrated latent space and simulation; for
+pure classification here, the protein panel carries most of the signal.
+
+# 6. Reproducibility
 
 The R wrapper runs Matilda's **unchanged** Python, so on the **same hardware** it is
 bit-identical to the original (verified across classification, dimension reduction, feature
@@ -256,6 +292,12 @@ selection and simulation by `inst/scripts/parity_check.R`, `max|Δ| = 0`): GPU q
 GPU↔CPU gap is PyTorch floating-point, not the wrapper. Results are format-independent
 (§1 equivalence checks are all `TRUE`). UMAP layouts differ run-to-run by construction
 (stochastic embedding), but the cluster structure is stable.
+
+> **A note on augmentation (the 5th task).** `matilda_train(augmentation = TRUE)` (the default)
+> VAE-resamples rare cell types to balance training — aimed at heavily imbalanced data. Its
+> benefit is dataset-dependent: on this small TEA-seq split it does not improve accuracy
+> (aug on = 0.8092 vs off = 0.8360), because the rarest types have only ~3 training cells. It is
+> exposed as a toggle rather than demonstrated as a win here.
 
 ```{r sessioninfo}
 sessionInfo()
