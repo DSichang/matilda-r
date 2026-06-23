@@ -247,11 +247,26 @@ qmarkers <- matilda_markers(query, reference = sce)
 head(qmarkers)
 ```
 
-# 5. Why multimodal? (modality contribution)
+# 5. Running each data type (and why multimodal helps)
 
-Matilda auto-detects the **mode** from the modalities you pass — `rna_only`, `CITEseq` (RNA+ADT),
-`SHAREseq` (RNA+ATAC), `TEAseq` (RNA+ADT+ATAC) — and adapts the model. Training on each
-combination of the *same* cells shows what each modality buys for classification.
+Matilda supports four **data types**, auto-detected from the modalities you provide, and adapts
+the model to each. The four runs below are a **controlled ablation on the *same real* TEA-seq
+cells** (modalities included/excluded) — not four separate datasets and not synthetic data.
+Because Matilda treats a "data type" as simply *which modalities are present*, this is exactly how
+you would run a real dataset of each type — just load the modalities you have:
+
+| Data type | mode | R: build the object with | Python script |
+|-----------|------|--------------------------|---------------|
+| scRNA-seq | `rna_only` | RNA `counts` only (no `altExp`) | `main_matilda_rna_train.py` / `…_rna_task.py` |
+| CITE-seq  | `CITEseq`  | RNA + `altExp "ADT"` | `main_matilda_train.py` / `main_matilda_task.py` |
+| SHARE-seq | `SHAREseq` | RNA + `altExp "ATAC"` | `main_matilda_train.py` / `main_matilda_task.py` |
+| TEA-seq   | `TEAseq`   | RNA + `altExp "ADT"` + `altExp "ATAC"` | `main_matilda_train.py` / `main_matilda_task.py` |
+
+> **No CITE-seq/SHARE-seq demo dataset ships with Matilda** (only TEA-seq), so here we ablate
+> TEA-seq to exercise every mode on real data. To run your *own* data of a given type, build the
+> object with exactly the modalities above — `matilda_train()` selects the mode automatically.
+
+Training each combination on the *same* cells also shows what each modality buys for classification.
 
 **Python** — same scripts, just fewer modality flags (the mode follows automatically; RNA-only
 uses the `*_rna_*` scripts):

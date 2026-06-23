@@ -134,8 +134,9 @@ next to the equivalent **R** call, then the output and a plot:
    (latent UMAP), feature selection (marker heatmap).
 4. **Multi-task on the query data** — classification (per-cell-type accuracy), dimension
    reduction, feature selection.
-5. **Why multimodal?** — accuracy by modality combination across the `rna_only` / `CITEseq` /
-   `SHAREseq` / `TEAseq` modes (adding the ADT panel gives the largest gain).
+5. **Running each data type** — `rna_only` / `CITEseq` / `SHAREseq` / `TEAseq` exercised on the
+   *same real* TEA-seq cells (a modality ablation — only TEA-seq ships with Matilda): how to load
+   each type and why adding modalities (esp. the ADT panel) helps.
 
 ```r
 rmarkdown::render("inst/tutorials/matilda-tutorial.Rmd")
