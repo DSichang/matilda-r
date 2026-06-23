@@ -74,7 +74,6 @@ The R layer is a thin, faithful driver; all the modeling math lives in the vendo
 |------|---------|
 | `inst/tutorials/matilda-tutorial.Rmd` | **the tutorial** — a Python ⇄ R mirror on TEA-seq (see below) |
 | `inst/scripts/parity_check.R` | R-vs-Python bit-parity across all tasks |
-| `vignettes/matilda.Rmd` | Bioconductor vignette (toy data, builds fast under `R CMD check`) |
 | `tests/testthat/` | unit tests (+ `helper-skip.R`, `helper-toy.R`) |
 | `man/` | generated documentation |
 
