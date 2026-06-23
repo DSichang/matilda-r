@@ -45,7 +45,8 @@ Matilda's input is **RNA raw counts** + **ADT** + **ATAC** gene-activity. Python
 into a `SingleCellExperiment` (RNA in the main assay, ADT/ATAC as `altExp`s, labels in
 `colData`). The reading is explicit so you can adapt it to your own data.
 
-**Python** — the files are passed straight to the scripts, e.g. `--rna train_rna.h5 ...`.
+**Python** — pass the file paths straight to the functions, e.g.
+`main_train("train_rna.h5", ...)` (`pip install matilda-sc`).
 
 **R** — read the native Matilda `.h5` (`matrix/data` / `features` / `barcodes`):
 
@@ -94,12 +95,12 @@ isTRUE(all.equal(as.matrix(counts(sce)),
 
 # 2. Train the Matilda model
 
-**Python**
-```bash
-python main_matilda_train.py \
-  --rna train_rna.h5 --adt train_adt.h5 --atac train_atac.h5 --cty train_cty.csv \
-  --batch_size 64 --epochs 30 --lr 0.02 --z_dim 100 \
-  --hidden_rna 185 --hidden_adt 30 --hidden_atac 185 --seed 1
+**Python** (function API — `pip install matilda-sc`):
+```python
+from matilda.main_matilda_train import main_train
+main_train("train_rna.h5", "train_adt.h5", "train_atac.h5", "train_cty.csv",
+           batch_size=64, epochs=30, lr=0.02, z_dim=100,
+           hidden_rna=185, hidden_adt=30, hidden_atac=185, seed=1)
 ```
 
 **R** (same defaults; the model is stored in the object and the workflow pipes):
@@ -110,12 +111,13 @@ matilda_model(sce)
 
 # 3. Multi-task on the training data
 
-## 3a. Simulation — `--simulation True --simulation_ct B.Naive --simulation_num 200`
+## 3a. Simulation — `simulation=True, simulation_ct="B.Naive", simulation_num=200`
 
 **Python**
-```bash
-python main_matilda_task.py --rna train_rna.h5 --adt train_adt.h5 --atac train_atac.h5 \
-  --cty train_cty.csv --simulation True --simulation_ct B.Naive --simulation_num 200
+```python
+from matilda.main_matilda_task import main_task
+main_task("train_rna.h5", "train_adt.h5", "train_atac.h5", "train_cty.csv",
+          simulation=True, simulation_ct="B.Naive", simulation_num=200)
 ```
 
 **R** — generate 200 synthetic `B.Naive` cells (mirrors `qc/visualize_simulated_data.Rmd`):
@@ -131,12 +133,11 @@ scater::plotUMAP(sim, colour_by = "origin") +
   ggtitle("Simulated B.Naive cells among the real cells")
 ```
 
-## 3b. Dimension reduction — `--dim_reduce True`
+## 3b. Dimension reduction — `dim_reduce=True`
 
 **Python**
-```bash
-python main_matilda_task.py --rna train_rna.h5 --adt train_adt.h5 --atac train_atac.h5 \
-  --cty train_cty.csv --dim_reduce True
+```python
+main_task("train_rna.h5", "train_adt.h5", "train_atac.h5", "train_cty.csv", dim_reduce=True)
 ```
 
 **R**
@@ -158,12 +159,12 @@ su <- Seurat::RunUMAP(su, dims = 1:10, verbose = FALSE)
 Seurat::DimPlot(su, reduction = "umap", group.by = "celltype")
 ```
 
-## 3c. Feature selection — `--fs True --fs_method IntegratedGradient`
+## 3c. Feature selection — `fs=True, fs_method="IntegratedGradient"`
 
 **Python**
-```bash
-python main_matilda_task.py --rna train_rna.h5 --adt train_adt.h5 --atac train_atac.h5 \
-  --cty train_cty.csv --fs True --fs_method IntegratedGradient
+```python
+main_task("train_rna.h5", "train_adt.h5", "train_atac.h5", "train_cty.csv",
+          fs=True, fs_method="IntegratedGradient")
 ```
 
 **R**
@@ -187,19 +188,18 @@ ggplot(sub, aes(celltype, feature, fill = imp_s)) +
 
 # 4. Multi-task on the query data
 
-Same three task verbs, now on the held-out query split with `reference = sce` (the
-`--query True` flag).
+Same three task verbs, now on the held-out query split with `reference = sce` (Python: `query=True`).
 
 ```{r load-query}
 query <- load_h5_sce(demo_h5, "test")      # 5048 held-out cells
 ```
 
-## 4a. Classification — `--classification True --query True`
+## 4a. Classification — `classification=True, query=True`
 
 **Python**
-```bash
-python main_matilda_task.py --rna test_rna.h5 --adt test_adt.h5 --atac test_atac.h5 \
-  --cty test_cty.csv --classification True --query True
+```python
+main_task("test_rna.h5", "test_adt.h5", "test_atac.h5", "test_cty.csv",
+          classification=True, query=True)
 ```
 
 **R**
@@ -219,12 +219,11 @@ ggplot(acc_df, aes(reorder(cell_type, accuracy), accuracy)) +
   theme_classic()
 ```
 
-## 4b. Dimension reduction — `--dim_reduce True --query True`
+## 4b. Dimension reduction — `dim_reduce=True, query=True`
 
 **Python**
-```bash
-python main_matilda_task.py --rna test_rna.h5 --adt test_adt.h5 --atac test_atac.h5 \
-  --cty test_cty.csv --dim_reduce True --query True
+```python
+main_task("test_rna.h5", "test_adt.h5", "test_atac.h5", "test_cty.csv", dim_reduce=True, query=True)
 ```
 
 **R**
@@ -233,12 +232,11 @@ query <- matilda_reduce(query, reference = sce)
 dim(reducedDim(query, "MATILDA"))          # 5048 x 100
 ```
 
-## 4c. Feature selection — `--fs True --query True`
+## 4c. Feature selection — `fs=True, query=True`
 
 **Python**
-```bash
-python main_matilda_task.py --rna test_rna.h5 --adt test_adt.h5 --atac test_atac.h5 \
-  --cty test_cty.csv --fs True --query True
+```python
+main_task("test_rna.h5", "test_adt.h5", "test_atac.h5", "test_cty.csv", fs=True, query=True)
 ```
 
 **R**
@@ -255,12 +253,12 @@ cells** (modalities included/excluded) — not four separate datasets and not sy
 Because Matilda treats a "data type" as simply *which modalities are present*, this is exactly how
 you would run a real dataset of each type — just load the modalities you have:
 
-| Data type | mode | R: build the object with | Python script |
-|-----------|------|--------------------------|---------------|
-| scRNA-seq | `rna_only` | RNA `counts` only (no `altExp`) | `main_matilda_rna_train.py` / `…_rna_task.py` |
-| CITE-seq  | `CITEseq`  | RNA + `altExp "ADT"` | `main_matilda_train.py` / `main_matilda_task.py` |
-| SHARE-seq | `SHAREseq` | RNA + `altExp "ATAC"` | `main_matilda_train.py` / `main_matilda_task.py` |
-| TEA-seq   | `TEAseq`   | RNA + `altExp "ADT"` + `altExp "ATAC"` | `main_matilda_train.py` / `main_matilda_task.py` |
+| Data type | mode | R: build the object with | Python function (`matilda-sc`) |
+|-----------|------|--------------------------|--------------------------------|
+| scRNA-seq | `rna_only` | RNA `counts` only (no `altExp`) | `rna_train()` / `rna_task()` |
+| CITE-seq  | `CITEseq`  | RNA + `altExp "ADT"` | `main_train()` / `main_task()` |
+| SHARE-seq | `SHAREseq` | RNA + `altExp "ATAC"` | `main_train()` / `main_task()` |
+| TEA-seq   | `TEAseq`   | RNA + `altExp "ADT"` + `altExp "ATAC"` | `main_train()` / `main_task()` |
 
 > **No CITE-seq/SHARE-seq demo dataset ships with Matilda** (only TEA-seq), so here we ablate
 > TEA-seq to exercise every mode on real data. To run your *own* data of a given type, build the
@@ -268,12 +266,14 @@ you would run a real dataset of each type — just load the modalities you have:
 
 Training each combination on the *same* cells also shows what each modality buys for classification.
 
-**Python** — same scripts, just fewer modality flags (the mode follows automatically; RNA-only
-uses the `*_rna_*` scripts):
-```bash
-python main_matilda_rna_train.py --rna train_rna.h5 --cty train_cty.csv                      # rna_only
-python main_matilda_train.py --rna train_rna.h5 --adt  train_adt.h5  --cty train_cty.csv     # CITEseq
-python main_matilda_train.py --rna train_rna.h5 --atac train_atac.h5 --cty train_cty.csv     # SHAREseq
+**Python** — same functions, fewer modalities (RNA-only uses `rna_train`; pass `"NULL"` for an
+absent modality):
+```python
+from matilda.main_matilda_rna_train import rna_train
+from matilda.main_matilda_train     import main_train
+rna_train("train_rna.h5", "train_cty.csv")                            # rna_only
+main_train("train_rna.h5", "train_adt.h5", "NULL", "train_cty.csv")   # CITEseq
+main_train("train_rna.h5", "NULL", "train_atac.h5", "train_cty.csv")  # SHAREseq
 # TEAseq (all three) was trained in section 2
 ```
 

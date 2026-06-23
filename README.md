@@ -125,8 +125,8 @@ script and the model architecture.
 ## Tutorial
 
 [`inst/tutorials/matilda-tutorial.Rmd`](inst/tutorials/matilda-tutorial.Rmd) — a one-to-one
-**Python ⇄ R mirror** on real TEA-seq. For each step it shows the original **Python CLI** command
-next to the equivalent **R** call, then the output and a plot:
+**Python ⇄ R mirror** on real TEA-seq. For each step it shows the Matilda **Python function call**
+(`matilda-sc`) next to the equivalent **R** call, then the output and a plot:
 
 1. **Read the data** — explicit loaders (`.h5`, plus a `Seurat`/`.h5ad` cross-check).
 2. **Train** (`matilda_train` ⇄ `main_matilda_train.py`).

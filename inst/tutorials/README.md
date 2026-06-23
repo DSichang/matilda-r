@@ -1,8 +1,8 @@
 # matilda tutorial
 
 **`matilda-tutorial.Rmd`** — a **Python ⇄ R mirror** on TEA-seq: for every step it shows
-the original Matilda **Python CLI** command and the **R** call that runs the same code, then
-the output and a plot.
+the Matilda **Python function call** (`matilda-sc`) and the **R** call that runs the same code,
+then the output and a plot.
 
 1. **Read the data** into a `SingleCellExperiment`, shown explicitly (native `.h5` via
    `rhdf5`, plus a `Seurat`/`.h5ad` cross-check verified element-identical).
