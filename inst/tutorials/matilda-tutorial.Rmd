@@ -1,11 +1,10 @@
 ---
-title: "Matilda on TEA-seq: a Python ⇄ R mirror (data → tasks → plots)"
+title: "Matilda on TEA-seq — R tutorial"
 output:
   html_document:
     toc: true
     toc_float: true
     toc_depth: 2
-    number_sections: false
 ---
 
 ```{r setup, include = FALSE}
@@ -13,115 +12,150 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>", message = FALSE, warning 
 library(ggplot2)
 ```
 
-This tutorial is a **one-to-one mirror of the original Matilda Python tutorial**, on the
-real **TEA-seq** dataset (RNA + ADT + ATAC). For every step it shows the **Python** command
-you would run and the **R** call that runs the *same* unchanged code underneath, then the
-output and a plot. The R wrapper drives Matilda's vendored Python via `basilisk`, so on the
-same hardware the two are **bit-identical** (verified across all tasks by
-`inst/scripts/parity_check.R`).
-
-Layout mirrors the docs: **train → multi-task on the training data → multi-task on the query
-data**. Plots mirror the official `qc/visulize_latent_space.Rmd` and
-`qc/visualize_simulated_data.Rmd`.
+The complete Matilda workflow in **R** on real **TEA-seq** (RNA + ADT + ATAC): read your data →
+train → classification → dimension reduction → feature selection → simulation, plus a look at the
+different data types Matilda supports. (A parallel **Python** tutorial, `matilda-tutorial.ipynb`,
+has the identical structure.)
 
 ## Requirements
 
-- **R**: `matilda`, `SingleCellExperiment`; `Seurat` + `zellkonverter` for the alternative
-  loaders; `scater` for UMAPs; `ggplot2` for the plots (chunks skip if a package is missing).
-- **Python**: none — provisioned by `basilisk` on the first `matilda_train()` (one-off build).
-- **Demo data**: the 8 TEA-seq files (`{train,test}_{rna,adt,atac}.h5` + `{train,test}_cty.csv`).
+- **R**: `matilda`, `SingleCellExperiment`; for the alternative loaders `zellkonverter` (`.h5ad`)
+  and `Seurat` (`10x` + `.rds`); `scater` for UMAP; `ggplot2` for plots.
+- **Python**: none — `matilda` provisions it via `basilisk` on the first `matilda_train()`.
+- **Demo data**: TEA-seq in four formats (paths below).
 
 ```{r deps}
 library(matilda)
 library(SingleCellExperiment)
-demo_h5  <- getOption("matilda.demo",         "~/Documents/matilda-r/teaseq")
-demo_fmt <- getOption("matilda.demo_formats", "~/Documents/matilda-r/teaseq_formats")
+demo_h5  <- getOption("matilda.demo",         "~/Documents/matilda-r/teaseq")           # native .h5 + _cty.csv
+demo_fmt <- getOption("matilda.demo_formats", "~/Documents/matilda-r/teaseq_formats")   # .h5ad / 10x / .rds
 ```
 
-# 1. Read the data
+# 1. Read your data
 
-Matilda's input is **RNA raw counts** + **ADT** + **ATAC** gene-activity. Python reads the
-`.h5`/`.csv` files directly inside the CLI (`util.read_h5_data`); in R we read the same files
-into a `SingleCellExperiment` (RNA in the main assay, ADT/ATAC as `altExp`s, labels in
-`colData`). The reading is explicit so you can adapt it to your own data.
+Matilda's R interface takes a `SingleCellExperiment`: **RNA raw counts** in the main assay, **ADT**
+and **ATAC** (gene activity) as `altExp`s, and a cell-type column in `colData`. Below the *same*
+TEA-seq training cells are loaded from **four formats** — pick whichever matches your data.
 
-**Python** — pass the file paths straight to the functions, e.g.
-`main_train("train_rna.h5", ...)` (`pip install matilda-sc`).
+```{r build-sce}
+# assemble an SCE from three genes x cells matrices + a label vector
+build_sce <- function(rna, adt, atac, cell_type) {
+  sce <- SingleCellExperiment(assays = list(counts = as.matrix(rna)))
+  altExp(sce, "ADT")  <- SummarizedExperiment(list(counts = as.matrix(adt)))
+  altExp(sce, "ATAC") <- SummarizedExperiment(list(counts = as.matrix(atac)))
+  sce$cell_type <- cell_type
+  sce
+}
+labels <- as.character(utils::read.csv(file.path(demo_h5, "train_cty.csv"), header = FALSE)[[2]])[-1]
+```
 
-**R** — read the native Matilda `.h5` (`matrix/data` / `features` / `barcodes`):
+## Format A — native Matilda `.h5` (`rhdf5`)
 
-```{r load-h5}
+```{r read-h5}
 read_h5 <- function(path) {
   m     <- rhdf5::h5read(path, "matrix/data")
   feats <- as.character(rhdf5::h5read(path, "matrix/features"))
   cells <- as.character(rhdf5::h5read(path, "matrix/barcodes"))
-  if (nrow(m) == length(cells) && ncol(m) == length(feats)) m <- t(m)  # -> genes x cells
-  stopifnot(nrow(m) == length(feats), ncol(m) == length(cells))
+  if (nrow(m) == length(cells) && ncol(m) == length(feats)) m <- t(m)   # -> genes x cells
   dimnames(m) <- list(feats, cells); m
 }
-load_h5_sce <- function(dir, split) {
-  g <- function(mod) file.path(dir, sprintf("%s_%s.h5", split, mod))
-  sce <- SingleCellExperiment(assays = list(counts = read_h5(g("rna"))))
-  altExp(sce, "ADT")  <- SummarizedExperiment(list(counts = read_h5(g("adt"))))
-  altExp(sce, "ATAC") <- SummarizedExperiment(list(counts = read_h5(g("atac"))))
-  sce$cell_type <- as.character(
-    utils::read.csv(file.path(dir, sprintf("%s_cty.csv", split)), header = FALSE)[[2]])[-1]
-  sce
-}
-sce <- load_h5_sce(demo_h5, "train")
+g  <- function(mod) file.path(demo_h5, sprintf("train_%s.h5", mod))
+sce <- build_sce(read_h5(g("rna")), read_h5(g("adt")), read_h5(g("atac")), labels)
 sce
-lapply(altExps(sce), dim)
 ```
 
-The same data also loads from a **Seurat** object or **`.h5ad`** (AnnData), verified
-element-identical to the `.h5` above — so downstream results don't depend on the format:
+## Format B — `.h5ad` (AnnData / scanpy, via `zellkonverter`)
 
-```{r load-seurat, eval = requireNamespace("Seurat", quietly = TRUE)}
-seu <- readRDS(file.path(demo_fmt, "train_seurat.rds"))
-ga  <- function(a) as.matrix(SeuratObject::LayerData(seu, assay = a, layer = "counts"))
-c(RNA  = isTRUE(all.equal(as.matrix(counts(sce)),               ga("RNA"))),
-  ADT  = isTRUE(all.equal(as.matrix(assay(altExp(sce, "ADT"))),  ga("ADT"))),
-  ATAC = isTRUE(all.equal(as.matrix(assay(altExp(sce, "ATAC"))), ga("ATAC"))))
+```{r read-h5ad, eval = requireNamespace("zellkonverter", quietly = TRUE)}
+rd_h5ad <- function(p) as.matrix(SummarizedExperiment::assay(zellkonverter::readH5AD(p), "counts"))
+h <- function(mod) file.path(demo_fmt, sprintf("train_%s.h5ad", mod))
+sce_h5ad <- build_sce(rd_h5ad(h("rna")), rd_h5ad(h("adt")), rd_h5ad(h("atac")), labels)
+isTRUE(all.equal(as.matrix(counts(sce)), as.matrix(counts(sce_h5ad))))   # identical to Format A
 ```
 
-```{r load-h5ad, eval = requireNamespace("zellkonverter", quietly = TRUE)}
-ad <- zellkonverter::readH5AD(file.path(demo_fmt, "train_rna.h5ad"))
-isTRUE(all.equal(as.matrix(counts(sce)),
-                 as.matrix(SummarizedExperiment::assay(ad, "counts"))))  # RNA identical
+## Format C — 10x CellRanger (`Seurat::Read10X`)
+
+```{r read-10x, eval = requireNamespace("Seurat", quietly = TRUE)}
+rd_10x <- function(d) as.matrix(Seurat::Read10X(d))
+x <- function(mod) file.path(demo_fmt, "10x", sprintf("train_%s", mod))
+sce_10x <- build_sce(rd_10x(x("rna")), rd_10x(x("adt")), rd_10x(x("atac")), labels)
+isTRUE(all.equal(as.matrix(counts(sce)), as.matrix(counts(sce_10x))))    # identical to Format A
 ```
 
-> Other starting points: 10x via `DropletUtils::read10xCounts()` (+ `splitAltExps()`); ATAC
-> peaks must first become a gene-activity matrix (`Signac::GeneActivity()`).
+## Format D — a `Seurat` object (`.rds`)
+
+```{r read-rds, eval = requireNamespace("Seurat", quietly = TRUE)}
+seu  <- readRDS(file.path(demo_fmt, "train_seurat.rds"))            # RNA/ADT/ATAC assays + cell_type
+ga   <- function(a) as.matrix(SeuratObject::LayerData(seu, assay = a, layer = "counts"))
+sce_rds <- build_sce(ga("RNA"), ga("ADT"), ga("ATAC"), seu$cell_type)
+isTRUE(all.equal(as.matrix(counts(sce)), as.matrix(counts(sce_rds))))    # identical to Format A
+```
+
+All four give the same object, so the rest of the tutorial doesn't depend on the format. We
+continue with `sce` from Format A.
 
 # 2. Train the Matilda model
 
-**Python** (function API — `pip install matilda-sc`):
-```python
-from matilda.main_matilda_train import main_train
-main_train("train_rna.h5", "train_adt.h5", "train_atac.h5", "train_cty.csv",
-           batch_size=64, epochs=30, lr=0.02, z_dim=100,
-           hidden_rna=185, hidden_adt=30, hidden_atac=185, seed=1)
-```
+The model is stored inside the object, so the workflow pipes.
 
-**R** (same defaults; the model is stored in the object and the workflow pipes):
 ```{r train}
 sce <- matilda_train(sce, label = "cell_type")
 matilda_model(sce)
 ```
 
-# 3. Multi-task on the training data
+# 3. Classification (held-out query cells)
 
-## 3a. Simulation — `simulation=True, simulation_ct="B.Naive", simulation_num=200`
-
-**Python**
-```python
-from matilda.main_matilda_task import main_task
-main_task("train_rna.h5", "train_adt.h5", "train_atac.h5", "train_cty.csv",
-          simulation=True, simulation_ct="B.Naive", simulation_num=200)
+```{r classify}
+query <- build_sce(read_h5(file.path(demo_h5, "test_rna.h5")),
+                   read_h5(file.path(demo_h5, "test_adt.h5")),
+                   read_h5(file.path(demo_h5, "test_atac.h5")),
+                   as.character(utils::read.csv(file.path(demo_h5, "test_cty.csv"), header = FALSE)[[2]])[-1])
+query <- matilda_classify(query, reference = sce)
+sprintf("overall query accuracy = %.4f", mean(query$matilda_pred == query$cell_type))
 ```
 
-**R** — generate 200 synthetic `B.Naive` cells (mirrors `qc/visualize_simulated_data.Rmd`):
-```{r sim-train}
+```{r classify-plot, fig.width = 7, fig.height = 5}
+acc <- tapply(query$matilda_pred == query$cell_type, query$cell_type, mean)
+ggplot(data.frame(cell_type = names(acc), accuracy = as.numeric(acc)),
+       aes(reorder(cell_type, accuracy), accuracy)) +
+  geom_col(fill = "steelblue") + coord_flip() + ylim(0, 1) +
+  geom_text(aes(label = sprintf("%.2f", accuracy)), hjust = -0.1, size = 3) +
+  labs(title = "Query accuracy by cell type", x = NULL, y = "accuracy") + theme_classic()
+```
+
+# 4. Dimension reduction
+
+```{r reduce}
+sce <- matilda_reduce(sce)                 # adds reducedDim(sce, "MATILDA")
+dim(reducedDim(sce, "MATILDA"))            # cells x z_dim (100)
+```
+
+```{r umap, fig.width = 7, fig.height = 5, eval = requireNamespace("scater", quietly = TRUE)}
+sce <- scater::runUMAP(sce, dimred = "MATILDA")
+scater::plotUMAP(sce, colour_by = "cell_type") + ggtitle("Matilda integrated latent space (UMAP)")
+```
+
+# 5. Feature selection
+
+```{r markers}
+markers <- matilda_markers(sce)            # data.frame: celltype / feature / importance
+head(markers)
+```
+
+```{r markers-plot, fig.width = 8, fig.height = 6}
+top <- do.call(rbind, by(markers, markers$celltype,
+                         function(d) head(d[order(-d$importance), ], 3)))
+sub <- markers[markers$feature %in% unique(top$feature), ]
+sub$imp_s <- ave(sub$importance, sub$feature, FUN = function(z) (z - min(z)) / (max(z) - min(z) + 1e-9))
+ggplot(sub, aes(celltype, feature, fill = imp_s)) +
+  geom_tile() + scale_fill_viridis_c() + theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Top-3 markers per cell type", x = NULL, y = NULL, fill = "scaled\nimportance")
+```
+
+# 6. Simulation
+
+```{r simulate}
 sim <- matilda_simulate(sce, celltype = "B.Naive", n = 200)
 sim$origin <- ifelse(sim$label == "B.Naive", "synthetic B.Naive", "real (other types)")
 table(sim$origin)
@@ -129,155 +163,16 @@ table(sim$origin)
 
 ```{r sim-plot, fig.width = 6, fig.height = 5, eval = requireNamespace("scater", quietly = TRUE)}
 sim <- scater::runUMAP(sim, exprs_values = "counts", scale = TRUE, ntop = 1000, n_neighbors = 20)
-scater::plotUMAP(sim, colour_by = "origin") +
-  ggtitle("Simulated B.Naive cells among the real cells")
+scater::plotUMAP(sim, colour_by = "origin") + ggtitle("Simulated B.Naive cells among the real cells")
 ```
 
-## 3b. Dimension reduction — `dim_reduce=True`
+# 7. The data types Matilda supports
 
-**Python**
-```python
-main_task("train_rna.h5", "train_adt.h5", "train_atac.h5", "train_cty.csv", dim_reduce=True)
-```
+Matilda auto-detects the **mode** from the modalities present — `rna_only`, `CITEseq` (RNA+ADT),
+`SHAREseq` (RNA+ATAC), `TEAseq` (RNA+ADT+ATAC). Training each on the *same* real TEA-seq cells
+(a modality ablation — only TEA-seq ships with Matilda) shows what each modality buys; to run your
+own data of a type, just build the SCE with those modalities.
 
-**R**
-```{r reduce-train}
-sce <- matilda_reduce(sce)
-dim(reducedDim(sce, "MATILDA"))            # cells x z_dim (100)
-```
-
-Plot the latent space, reproducing `qc/visulize_latent_space.Rmd` (Seurat: PCA → UMAP on the
-first 10 PCs):
-```{r umap-train, fig.width = 7, fig.height = 5, eval = requireNamespace("Seurat", quietly = TRUE)}
-L <- as(t(reducedDim(sce, "MATILDA")), "CsparseMatrix")
-rownames(L) <- paste0("z", seq_len(nrow(L))); colnames(L) <- colnames(sce)
-su <- Seurat::CreateSeuratObject(counts = L)
-su[["RNA"]]$data <- su[["RNA"]]$counts
-su$celltype <- sce$cell_type
-su <- Seurat::RunPCA(Seurat::ScaleData(Seurat::FindVariableFeatures(su), verbose = FALSE), verbose = FALSE)
-su <- Seurat::RunUMAP(su, dims = 1:10, verbose = FALSE)
-Seurat::DimPlot(su, reduction = "umap", group.by = "celltype")
-```
-
-## 3c. Feature selection — `fs=True, fs_method="IntegratedGradient"`
-
-**Python**
-```python
-main_task("train_rna.h5", "train_adt.h5", "train_atac.h5", "train_cty.csv",
-          fs=True, fs_method="IntegratedGradient")
-```
-
-**R**
-```{r markers}
-markers <- matilda_markers(sce)            # data.frame: celltype / feature / importance
-head(markers)
-```
-
-Top markers per cell type (importance scaled per feature for visibility):
-```{r markers-plot, fig.width = 8, fig.height = 6}
-top  <- do.call(rbind, by(markers, markers$celltype,
-                          function(d) head(d[order(-d$importance), ], 3)))
-sub  <- markers[markers$feature %in% unique(top$feature), ]
-sub$imp_s <- ave(sub$importance, sub$feature,
-                 FUN = function(z) (z - min(z)) / (max(z) - min(z) + 1e-9))
-ggplot(sub, aes(celltype, feature, fill = imp_s)) +
-  geom_tile() + scale_fill_viridis_c() + theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(title = "Top-3 markers per cell type", x = NULL, y = NULL, fill = "scaled\nimportance")
-```
-
-# 4. Multi-task on the query data
-
-Same three task verbs, now on the held-out query split with `reference = sce` (Python: `query=True`).
-
-```{r load-query}
-query <- load_h5_sce(demo_h5, "test")      # 5048 held-out cells
-```
-
-## 4a. Classification — `classification=True, query=True`
-
-**Python**
-```python
-main_task("test_rna.h5", "test_adt.h5", "test_atac.h5", "test_cty.csv",
-          classification=True, query=True)
-```
-
-**R**
-```{r classify-query}
-query <- matilda_classify(query, reference = sce)
-sprintf("overall query accuracy = %.4f", mean(query$matilda_pred == query$cell_type))
-```
-
-Per-cell-type accuracy:
-```{r classify-plot, fig.width = 7, fig.height = 5}
-acc <- tapply(query$matilda_pred == query$cell_type, query$cell_type, mean)
-acc_df <- data.frame(cell_type = names(acc), accuracy = as.numeric(acc))
-ggplot(acc_df, aes(reorder(cell_type, accuracy), accuracy)) +
-  geom_col(fill = "steelblue") + coord_flip() + ylim(0, 1) +
-  geom_text(aes(label = sprintf("%.2f", accuracy)), hjust = -0.1, size = 3) +
-  labs(title = "Query classification accuracy by cell type", x = NULL, y = "accuracy") +
-  theme_classic()
-```
-
-## 4b. Dimension reduction — `dim_reduce=True, query=True`
-
-**Python**
-```python
-main_task("test_rna.h5", "test_adt.h5", "test_atac.h5", "test_cty.csv", dim_reduce=True, query=True)
-```
-
-**R**
-```{r reduce-query}
-query <- matilda_reduce(query, reference = sce)
-dim(reducedDim(query, "MATILDA"))          # 5048 x 100
-```
-
-## 4c. Feature selection — `fs=True, query=True`
-
-**Python**
-```python
-main_task("test_rna.h5", "test_adt.h5", "test_atac.h5", "test_cty.csv", fs=True, query=True)
-```
-
-**R**
-```{r fs-query}
-qmarkers <- matilda_markers(query, reference = sce)
-head(qmarkers)
-```
-
-# 5. Running each data type (and why multimodal helps)
-
-Matilda supports four **data types**, auto-detected from the modalities you provide, and adapts
-the model to each. The four runs below are a **controlled ablation on the *same real* TEA-seq
-cells** (modalities included/excluded) — not four separate datasets and not synthetic data.
-Because Matilda treats a "data type" as simply *which modalities are present*, this is exactly how
-you would run a real dataset of each type — just load the modalities you have:
-
-| Data type | mode | R: build the object with | Python function (`matilda-sc`) |
-|-----------|------|--------------------------|--------------------------------|
-| scRNA-seq | `rna_only` | RNA `counts` only (no `altExp`) | `rna_train()` / `rna_task()` |
-| CITE-seq  | `CITEseq`  | RNA + `altExp "ADT"` | `main_train()` / `main_task()` |
-| SHARE-seq | `SHAREseq` | RNA + `altExp "ATAC"` | `main_train()` / `main_task()` |
-| TEA-seq   | `TEAseq`   | RNA + `altExp "ADT"` + `altExp "ATAC"` | `main_train()` / `main_task()` |
-
-> **No CITE-seq/SHARE-seq demo dataset ships with Matilda** (only TEA-seq), so here we ablate
-> TEA-seq to exercise every mode on real data. To run your *own* data of a given type, build the
-> object with exactly the modalities above — `matilda_train()` selects the mode automatically.
-
-Training each combination on the *same* cells also shows what each modality buys for classification.
-
-**Python** — same functions, fewer modalities (RNA-only uses `rna_train`; pass `"NULL"` for an
-absent modality):
-```python
-from matilda.main_matilda_rna_train import rna_train
-from matilda.main_matilda_train     import main_train
-rna_train("train_rna.h5", "train_cty.csv")                            # rna_only
-main_train("train_rna.h5", "train_adt.h5", "NULL", "train_cty.csv")   # CITEseq
-main_train("train_rna.h5", "NULL", "train_atac.h5", "train_cty.csv")  # SHAREseq
-# TEAseq (all three) was trained in section 2
-```
-
-**R** — drop `altExp`s to change the mode, then re-train and classify the query:
 ```{r modality, fig.width = 7, fig.height = 4}
 keep_only <- function(s, keep) { for (ae in altExpNames(s)) if (!(ae %in% keep)) altExp(s, ae) <- NULL; s }
 acc <- sapply(list("RNA only" = character(0), "RNA+ATAC" = "ATAC", "RNA+ADT" = "ADT"),
@@ -286,33 +181,24 @@ acc <- sapply(list("RNA only" = character(0), "RNA+ATAC" = "ATAC", "RNA+ADT" = "
     qy  <- matilda_classify(keep_only(query, keep), reference = fit)
     mean(qy$matilda_pred == qy$cell_type)
   })
-acc["RNA+ADT+ATAC"] <- mean(query$matilda_pred == query$cell_type)   # reuse the TEAseq model from §2/§4
-mdf <- data.frame(modalities = factor(names(acc), levels = names(acc)), accuracy = as.numeric(acc))
-ggplot(mdf, aes(modalities, accuracy)) + geom_col(fill = "seagreen") + ylim(0, 1) +
+acc["RNA+ADT+ATAC"] <- mean(query$matilda_pred == query$cell_type)   # the TEAseq model from §2/§3
+ggplot(data.frame(modalities = factor(names(acc), levels = names(acc)), accuracy = as.numeric(acc)),
+       aes(modalities, accuracy)) +
+  geom_col(fill = "seagreen") + ylim(0, 1) +
   geom_text(aes(label = sprintf("%.3f", accuracy)), vjust = -0.4, size = 3.5) +
   labs(title = "Query accuracy by modality combination", x = NULL, y = "accuracy") + theme_classic()
 ```
 
-Adding the **ADT** (protein) panel to RNA gives the biggest jump in classification accuracy — the
-core value of multimodal integration. **ATAC** contributes less *for this task on this dataset*
-(full TEAseq ≈ RNA+ADT). Use all modalities for the integrated latent space and simulation; for
-pure classification here, the protein panel carries most of the signal.
+Adding the ADT (protein) panel to RNA gives the biggest gain; ATAC contributes less for this task
+on this dataset.
 
-# 6. Reproducibility
+# 8. Reproducibility
 
-The R wrapper runs Matilda's **unchanged** Python, so on the **same hardware** it is
-bit-identical to the original (verified across classification, dimension reduction, feature
-selection and simulation by `inst/scripts/parity_check.R`, `max|Δ| = 0`): GPU query accuracy
-**0.8092**, CPU **0.8148**. The accuracy printed in §4 is **this machine's** run; the small
-GPU↔CPU gap is PyTorch floating-point, not the wrapper. Results are format-independent
-(§1 equivalence checks are all `TRUE`). UMAP layouts differ run-to-run by construction
-(stochastic embedding), but the cluster structure is stable.
-
-> **A note on augmentation (the 5th task).** `matilda_train(augmentation = TRUE)` (the default)
-> VAE-resamples rare cell types to balance training — aimed at heavily imbalanced data. Its
-> benefit is dataset-dependent: on this small TEA-seq split it does not improve accuracy
-> (aug on = 0.8092 vs off = 0.8360), because the rarest types have only ~3 training cells. It is
-> exposed as a toggle rather than demonstrated as a win here.
+The R wrapper runs Matilda's **unchanged** Python, so on the **same hardware** it is bit-identical
+to the original (verified across all tasks by `inst/scripts/parity_check.R`, `max|Δ| = 0`):
+GPU query accuracy 0.8092, CPU 0.8148. The accuracy in §3 is this machine's run; the small GPU↔CPU
+gap is PyTorch floating-point, not the wrapper. Results are format-independent (the §1 checks are
+all `TRUE`).
 
 ```{r sessioninfo}
 sessionInfo()

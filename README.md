@@ -124,25 +124,23 @@ script and the model architecture.
 
 ## Tutorial
 
-[`inst/tutorials/matilda-tutorial.Rmd`](inst/tutorials/matilda-tutorial.Rmd) — a one-to-one
-**Python ⇄ R mirror** on real TEA-seq. For each step it shows the Matilda **Python function call**
-(`matilda-sc`) next to the equivalent **R** call, then the output and a plot:
+[`inst/tutorials/matilda-tutorial.Rmd`](inst/tutorials/matilda-tutorial.Rmd) — the complete
+workflow in **R** on real TEA-seq. (A separate, identically-structured **Python** tutorial — pure
+Python, `matilda-sc` function API — is provided as a Jupyter notebook for Python users.)
 
-1. **Read the data** — explicit loaders (`.h5`, plus a `Seurat`/`.h5ad` cross-check).
-2. **Train** (`matilda_train` ⇄ `main_matilda_train.py`).
-3. **Multi-task on the training data** — simulation (real-vs-synthetic UMAP), dimension reduction
-   (latent UMAP), feature selection (marker heatmap).
-4. **Multi-task on the query data** — classification (per-cell-type accuracy), dimension
-   reduction, feature selection.
-5. **Running each data type** — `rna_only` / `CITEseq` / `SHAREseq` / `TEAseq` exercised on the
-   *same real* TEA-seq cells (a modality ablation — only TEA-seq ships with Matilda): how to load
-   each type and why adding modalities (esp. the ADT panel) helps.
+1. **Read your data** — load TEA-seq from `.h5`, `.h5ad`, 10x, or a `Seurat` `.rds` (each verified
+   to give the same `SingleCellExperiment`).
+2. **Train** (`matilda_train`).
+3. **Classification** of held-out query cells (+ per-cell-type accuracy plot).
+4. **Dimension reduction** (+ latent-space UMAP).
+5. **Feature selection** (+ marker heatmap).
+6. **Simulation** (+ real-vs-synthetic UMAP).
+7. **The data types Matilda supports** — `rna_only` / `CITEseq` / `SHAREseq` / `TEAseq` on the
+   *same* TEA-seq cells (a modality ablation; adding the ADT panel helps most).
 
 ```r
 rmarkdown::render("inst/tutorials/matilda-tutorial.Rmd")
 ```
-
-The plots mirror the official `qc/visulize_latent_space.Rmd` and `qc/visualize_simulated_data.Rmd`.
 
 ---
 
