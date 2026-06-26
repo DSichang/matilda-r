@@ -32,7 +32,10 @@ matilda_simulate(
 \item{device}{"auto"/"cpu"/"cuda".}
 }
 \value{
-a SingleCellExperiment of simulated cells.
+a SingleCellExperiment of simulated cells. \code{metadata(.)$real}
+  holds the real reference cells Matilda used, as a list of per-modality
+  matrices (\code{rna}/\code{adt}/\code{atac}) plus \code{label}, in the same
+  feature space as the simulation (for real-vs-simulated UMAPs).
 }
 \description{
 Simulate cells for a cell type (or all types) from a trained model.
