@@ -2,6 +2,7 @@
 
 S3method(print,matilda_model)
 export(matilda_classify)
+export(matilda_download_example)
 export(matilda_example_sce)
 export(matilda_example_teaseq)
 export(matilda_markers)

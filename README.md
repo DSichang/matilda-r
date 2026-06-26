@@ -115,6 +115,7 @@ or `query = TRUE` (file API) ⇒ the `--query True` branch.
 | `print(<matilda_model>)` | summary: mode, cell types, latent dim, per-modality feature counts, hyperparameters |
 | `matilda_example_sce(n_cells=60)` | a tiny synthetic multimodal SCE for examples / quick trials |
 | `matilda_example_teaseq(dir=NULL)` | resolve the 8 TEA-seq demo file paths (`options(matilda.demo=)` / `MATILDA_DEMO`) |
+| `matilda_download_example()` | download + cache the TEA-seq demo dataset (~75 MB) used by the tutorial; returns the local dir |
 
 **Modes** are auto-detected from which modalities are present: `TEAseq` (RNA+ADT+ATAC),
 `CITEseq` (RNA+ADT), `SHAREseq` (RNA+ATAC), `rna_only` (RNA). The mode selects both the Python

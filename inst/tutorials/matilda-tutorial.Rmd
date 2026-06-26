@@ -14,29 +14,28 @@ library(ggplot2)
 
 The complete Matilda workflow in **R** on real **TEA-seq** (RNA + ADT + ATAC): read your data →
 train → classification → dimension reduction → feature selection → simulation, plus a look at the
-different data types Matilda supports. (A parallel **Python** tutorial, `matilda-tutorial.ipynb`,
-has the identical structure.)
+different data types Matilda supports. (Python users: a parallel tutorial with the same structure
+is available as a Jupyter notebook.)
 
 ## Requirements
 
-- **R**: `matilda`, `SingleCellExperiment`; for the alternative loaders `zellkonverter` (`.h5ad`)
-  and `Seurat` (`10x` + `.rds`); `scater` for UMAP; `ggplot2` for plots.
+- **R**: `matilda`, `SingleCellExperiment`; `Seurat` for the `10x` and `.rds` loaders; `scater`
+  for UMAP; `ggplot2` for plots.
 - **Python**: none — `matilda` provisions it via `basilisk` on the first `matilda_train()`.
-- **Demo data**: TEA-seq in four formats (paths below).
+- **Demo data**: downloaded automatically by `matilda_download_example()` (~75 MB, cached locally).
 
 ```{r deps}
 library(matilda)
 library(SingleCellExperiment)
-demo_h5  <- getOption("matilda.demo",         "~/Documents/matilda-r/teaseq")           # native .h5 + _cty.csv
-demo_fmt <- getOption("matilda.demo_formats", "~/Documents/matilda-r/teaseq_formats")   # .h5ad / 10x / .rds
+data_dir <- matilda_download_example()         # downloads + caches the TEA-seq demo, returns the path
+demo_h5  <- data_dir                            # native .h5 + _cty.csv
+demo_fmt <- file.path(data_dir, "formats")      # .h5ad / 10x / .rds
 
-# fixed colour palettes, shared with the Python tutorial so the plots match
+# colour palettes used throughout
 CELLTYPE_COLORS <- c(
   "B.Activated"="#1f77b4","B.Naive"="#aec7e8","DC.Myeloid"="#ff7f0e","Mono.CD14"="#ffbb78",
   "Mono.CD16"="#2ca02c","NK"="#98df8a","Platelets"="#d62728","T.CD4.Memory"="#ff9896",
   "T.CD4.Naive"="#9467bd","T.CD8.Effector"="#c5b0d5","T.CD8.Naive"="#8c564b")
-# anchor (the simulated cell type) vs the rest — ggplot's default two-hue palette,
-# matching the official Matilda figure and the Python tutorial
 ANCHOR_COLORS <- c("anchor cell type"="#F8766D","other cell types"="#00BFC4")
 ```
 
@@ -90,7 +89,6 @@ rd_h5ad <- function(p) {                                      # -> genes x cells
 }
 h <- function(mod) file.path(demo_fmt, sprintf("train_%s.h5ad", mod))
 sce_h5ad <- build_sce(rd_h5ad(h("rna")), rd_h5ad(h("adt")), rd_h5ad(h("atac")), labels)
-isTRUE(all.equal(as.matrix(counts(sce)), as.matrix(counts(sce_h5ad))))   # identical to Format A
 ```
 
 ## Format C — 10x CellRanger (`Seurat::Read10X`)
@@ -99,7 +97,6 @@ isTRUE(all.equal(as.matrix(counts(sce)), as.matrix(counts(sce_h5ad))))   # ident
 rd_10x <- function(d) as.matrix(Seurat::Read10X(d))
 x <- function(mod) file.path(demo_fmt, "10x", sprintf("train_%s", mod))
 sce_10x <- build_sce(rd_10x(x("rna")), rd_10x(x("adt")), rd_10x(x("atac")), labels)
-isTRUE(all.equal(as.matrix(counts(sce)), as.matrix(counts(sce_10x))))    # identical to Format A
 ```
 
 ## Format D — a `Seurat` object (`.rds`)
@@ -108,7 +105,6 @@ isTRUE(all.equal(as.matrix(counts(sce)), as.matrix(counts(sce_10x))))    # ident
 seu  <- readRDS(file.path(demo_fmt, "train_seurat.rds"))            # RNA/ADT/ATAC assays + cell_type
 ga   <- function(a) as.matrix(SeuratObject::LayerData(seu, assay = a, layer = "counts"))
 sce_rds <- build_sce(ga("RNA"), ga("ADT"), ga("ATAC"), seu$cell_type)
-isTRUE(all.equal(as.matrix(counts(sce)), as.matrix(counts(sce_rds))))    # identical to Format A
 ```
 
 All four give the same object, so the rest of the tutorial doesn't depend on the format. We
@@ -119,7 +115,7 @@ continue with `sce` from Format A.
 The model is stored inside the object, so the workflow pipes.
 
 ```{r train}
-sce <- matilda_train(sce, label = "cell_type")
+sce <- matilda_train(sce, label = "cell_type", seed = 1L)
 matilda_model(sce)
 ```
 
@@ -152,7 +148,7 @@ dim(reducedDim(sce, "MATILDA"))            # cells x z_dim (100)
 
 ```{r umap, fig.width = 7, fig.height = 5, eval = requireNamespace("scater", quietly = TRUE)}
 set.seed(42)
-sce <- scater::runUMAP(sce, dimred = "MATILDA", n_neighbors = 15L, min_dist = 0.1)   # matched with Python
+sce <- scater::runUMAP(sce, dimred = "MATILDA", n_neighbors = 15L, min_dist = 0.1)
 scater::plotUMAP(sce, colour_by = "cell_type") +
   ggplot2::scale_colour_manual(values = CELLTYPE_COLORS) +
   ggtitle("Matilda integrated latent space (UMAP)")
@@ -166,8 +162,7 @@ head(markers)
 ```
 
 ```{r markers-plot, fig.width = 8, fig.height = 6}
-# deterministic ordering (shared with Python): cell types alphabetical, features grouped by the
-# cell type they are a top-3 marker for, then by importance.
+# order cell types alphabetically; group features by the cell type they top-3 mark, then importance
 ord_ct <- sort(unique(markers$celltype))
 top    <- do.call(rbind, lapply(ord_ct, function(ct) {
   d <- markers[markers$celltype == ct, ]; head(d[order(-d$importance), ], 3)
@@ -253,21 +248,7 @@ ggplot(data.frame(modalities = factor(names(acc), levels = names(acc)), accuracy
 Adding the ADT (protein) panel to RNA gives the biggest gain; ATAC contributes less for this task
 on this dataset.
 
-# 8. Reproducibility
-
-The R wrapper runs Matilda's **unchanged** Python, so on the **same hardware** it is bit-identical
-to the original (verified across all tasks by `inst/scripts/parity_check.R`, `max|Δ| = 0`).
-This rendered tutorial and its Python counterpart (`matilda-tutorial.ipynb`) were both produced on
-the **same GPU machine**, so their numbers match exactly: query accuracy **0.8092** and per-modality
-accuracy **0.736 / 0.776 / 0.825 / 0.809**. Re-running on a CPU-only machine gives a slightly
-different value (e.g. 0.8148) — that gap is PyTorch GPU↔CPU floating-point, not the wrapper. Results
-are format-independent (the §1 checks are all `TRUE`).
-
-The UMAP **layout** (§4, §6) depends on the embedding implementation: this R tutorial uses `uwot`
-(via `scater::runUMAP`) and the Python tutorial uses `umap-learn`. Given identical latent coordinates,
-parameters (`n_neighbors = 15`, `min_dist = 0.1`) and seed, both recover the **same cluster structure
-and colour assignment**; the two layouts may still differ by a global rotation/reflection, which
-carries no biological meaning.
+# 8. Session info
 
 ```{r sessioninfo}
 sessionInfo()
