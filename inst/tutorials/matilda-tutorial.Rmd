@@ -192,20 +192,22 @@ real <- S4Vectors::metadata(sim)$real        # real reference cells, same space 
 c(simulated = ncol(sim), real = ncol(real$rna), anchor_cells = sum(sim$label == "B.Naive"))
 ```
 
-```{r sim-plot, fig.width = 9, fig.height = 6.5, eval = requireNamespace("scater", quietly = TRUE)}
+```{r sim-plot, fig.width = 9, fig.height = 6.5, eval = requireNamespace("uwot", quietly = TRUE)}
 real_mat <- list(RNA = real$rna, ADT = real$adt, ATAC = real$atac)
 sim_mat  <- list(RNA  = SummarizedExperiment::assay(sim, "counts"),
                  ADT  = SummarizedExperiment::assay(SingleCellExperiment::altExp(sim, "ADT"),  "counts"),
                  ATAC = SummarizedExperiment::assay(SingleCellExperiment::altExp(sim, "ATAC"), "counts"))
 anchor_tag <- function(lab) factor(ifelse(lab == "B.Naive", "anchor cell type", "other cell types"),
                                    levels = c("anchor cell type", "other cell types"))
-one_modality <- function(mod) {                # UMAP real+simulated together, then split the layout
-  comb <- cbind(real_mat[[mod]], sim_mat[[mod]])
+one_modality <- function(mod) {                # per modality: top-1000 HVG -> scale -> PCA -> UMAP, then split
+  X  <- t(cbind(real_mat[[mod]], sim_mat[[mod]]))                 # cells x features
   nr <- ncol(real_mat[[mod]]); ns <- ncol(sim_mat[[mod]])
-  sce_c <- SingleCellExperiment::SingleCellExperiment(list(logcounts = comb))
+  hv <- order(apply(X, 2, stats::var), decreasing = TRUE)[seq_len(min(1000L, ncol(X)))]
+  Z   <- scale(X[, hv])
+  pcs <- stats::prcomp(Z, rank. = min(50L, ncol(Z) - 1L), center = FALSE, scale. = FALSE)$x
   set.seed(42)
-  sce_c <- scater::runUMAP(sce_c, n_neighbors = 20L, scale = TRUE, ntop = 1000)
-  u <- as.data.frame(SingleCellExperiment::reducedDim(sce_c, "UMAP")); names(u) <- c("UMAP1", "UMAP2")
+  u <- as.data.frame(uwot::umap(pcs, n_neighbors = 20, min_dist = 0.1, init = "pca"))
+  names(u) <- c("UMAP1", "UMAP2")
   rbind(data.frame(u[seq_len(nr), ],      grp = anchor_tag(real$label), panel = paste("Real", mod)),
         data.frame(u[nr + seq_len(ns), ], grp = anchor_tag(sim$label),  panel = paste("Simulated", mod)))
 }
