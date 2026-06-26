@@ -157,7 +157,10 @@ matilda_markers <- function(x, reference = NULL, label = NULL,
 #' @inheritParams matilda_classify
 #' @param celltype cell-type name to simulate; \code{NULL} = all types.
 #' @param n number of cells to simulate.
-#' @return a SingleCellExperiment of simulated cells.
+#' @return a SingleCellExperiment of simulated cells. \code{metadata(.)$real}
+#'   holds the real reference cells Matilda used, as a list of per-modality
+#'   matrices (\code{rna}/\code{adt}/\code{atac}) plus \code{label}, in the same
+#'   feature space as the simulation (for real-vs-simulated UMAPs).
 #' @examples
 #' sce <- matilda_example_sce()
 #' \donttest{
@@ -179,7 +182,12 @@ matilda_simulate <- function(x, reference = NULL, celltype = NULL, n = 100L, lab
                  query = !is.null(reference), assay, adt_exp, atac_exp, device)
   on.exit(unlink(r$rundir, recursive = TRUE), add = TRUE)
   sim <- .read_sim(file.path(r$out, "simulation_result", model$mode, r$sub))
-  .build_sim(sim$sim, model$mode)
+  out <- .build_sim(sim$sim, model$mode)
+  # also expose the real reference data Matilda used (same feature space as the
+  # simulated cells) so callers can draw the official real-vs-simulated UMAPs.
+  if (methods::is(out, "SingleCellExperiment"))
+    S4Vectors::metadata(out)$real <- sim$real
+  out
 }
 
 #' Run Matilda tasks from file paths (mirrors main_matilda_task.py); writes to outdir.

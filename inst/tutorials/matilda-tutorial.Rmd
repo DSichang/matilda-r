@@ -35,7 +35,9 @@ CELLTYPE_COLORS <- c(
   "B.Activated"="#1f77b4","B.Naive"="#aec7e8","DC.Myeloid"="#ff7f0e","Mono.CD14"="#ffbb78",
   "Mono.CD16"="#2ca02c","NK"="#98df8a","Platelets"="#d62728","T.CD4.Memory"="#ff9896",
   "T.CD4.Naive"="#9467bd","T.CD8.Effector"="#c5b0d5","T.CD8.Naive"="#8c564b")
-ORIGIN_COLORS <- c("synthetic B.Naive"="#d62728","real (other types)"="#9ecae1")
+# anchor (the simulated cell type) vs the rest — ggplot's default two-hue palette,
+# matching the official Matilda figure and the Python tutorial
+ANCHOR_COLORS <- c("anchor cell type"="#F8766D","other cell types"="#00BFC4")
 ```
 
 # 1. Read your data
@@ -183,19 +185,46 @@ ggplot(sub, aes(celltype, feature, fill = imp_s)) +
 
 # 6. Simulation
 
+Matilda augments a chosen **anchor** cell type and returns the synthetic cells. The returned object
+also carries the real reference cells Matilda used (`metadata(sim)$real`), in the **same feature
+space** — so the two are directly comparable. The official check: per modality, UMAP the real and
+simulated cells together, then show the real cells (top row) and the simulated cells (bottom row),
+highlighting the anchor. If augmentation works, the anchor lands in the same place in both rows.
+
 ```{r simulate}
-sim <- matilda_simulate(sce, celltype = "B.Naive", n = 200)
-sim$origin <- ifelse(sim$label == "B.Naive", "synthetic B.Naive", "real (other types)")
-table(sim$origin)
+sim  <- matilda_simulate(sce, celltype = "B.Naive", n = 200)
+real <- S4Vectors::metadata(sim)$real        # real reference cells, same space as the simulation
+c(simulated = ncol(sim), real = ncol(real$rna), anchor_cells = sum(sim$label == "B.Naive"))
 ```
 
-```{r sim-plot, fig.width = 6, fig.height = 5, eval = requireNamespace("scater", quietly = TRUE)}
-set.seed(42)
-sim <- scater::runUMAP(sim, exprs_values = "counts", scale = TRUE, ntop = 1000,
-                       n_neighbors = 15L, min_dist = 0.1)             # matched with Python
-scater::plotUMAP(sim, colour_by = "origin") +
-  ggplot2::scale_colour_manual(values = ORIGIN_COLORS) +
-  ggtitle("Simulated B.Naive cells among the real cells")
+```{r sim-plot, fig.width = 9, fig.height = 6.5, eval = requireNamespace("scater", quietly = TRUE)}
+real_mat <- list(RNA = real$rna, ADT = real$adt, ATAC = real$atac)
+sim_mat  <- list(RNA  = SummarizedExperiment::assay(sim, "counts"),
+                 ADT  = SummarizedExperiment::assay(SingleCellExperiment::altExp(sim, "ADT"),  "counts"),
+                 ATAC = SummarizedExperiment::assay(SingleCellExperiment::altExp(sim, "ATAC"), "counts"))
+anchor_tag <- function(lab) factor(ifelse(lab == "B.Naive", "anchor cell type", "other cell types"),
+                                   levels = c("anchor cell type", "other cell types"))
+one_modality <- function(mod) {                # UMAP real+simulated together, then split the layout
+  comb <- cbind(real_mat[[mod]], sim_mat[[mod]])
+  nr <- ncol(real_mat[[mod]]); ns <- ncol(sim_mat[[mod]])
+  sce_c <- SingleCellExperiment::SingleCellExperiment(list(logcounts = comb))
+  set.seed(42)
+  sce_c <- scater::runUMAP(sce_c, n_neighbors = 20L, scale = TRUE, ntop = 1000)
+  u <- as.data.frame(SingleCellExperiment::reducedDim(sce_c, "UMAP")); names(u) <- c("UMAP1", "UMAP2")
+  rbind(data.frame(u[seq_len(nr), ],      grp = anchor_tag(real$label), panel = paste("Real", mod)),
+        data.frame(u[nr + seq_len(ns), ], grp = anchor_tag(sim$label),  panel = paste("Simulated", mod)))
+}
+big <- do.call(rbind, lapply(c("RNA", "ADT", "ATAC"), one_modality))
+big$panel <- factor(big$panel, levels = c("Real RNA", "Real ADT", "Real ATAC",
+                                          "Simulated RNA", "Simulated ADT", "Simulated ATAC"))
+ggplot(big, aes(UMAP1, UMAP2, colour = grp)) +
+  geom_point(size = 0.5, alpha = 0.8) +
+  facet_wrap(~ panel, nrow = 2, scales = "free") +
+  ggplot2::scale_colour_manual(values = ANCHOR_COLORS) +
+  theme_classic() +
+  theme(axis.text = element_blank(), axis.ticks = element_blank(),
+        legend.title = element_blank(), aspect.ratio = 1) +
+  labs(x = NULL, y = NULL, title = "Real vs. simulated cells per modality (anchor: B.Naive)")
 ```
 
 # 7. The data types Matilda supports
