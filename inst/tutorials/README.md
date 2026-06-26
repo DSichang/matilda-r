@@ -5,8 +5,8 @@ identically-structured **Python** tutorial — pure Python, `matilda-sc` functio
 alongside as a Jupyter notebook; R users use this one, Python users use that one.)
 
 1. **Read your data** into a `SingleCellExperiment`, shown for four formats — native `.h5`
-   (`rhdf5`), `.h5ad` (`zellkonverter`), 10x (`Seurat::Read10X`), and a `Seurat` `.rds` — each
-   verified to give the same object.
+   (`rhdf5`), `.h5ad` (also `rhdf5`, reading the AnnData CSR matrix directly), 10x
+   (`Seurat::Read10X`), and a `Seurat` `.rds` — each verified to give the same object.
 2. **Train** (`matilda_train`).
 3. **Classification** of held-out query cells (+ per-cell-type accuracy plot).
 4. **Dimension reduction** (+ latent-space UMAP).
@@ -20,7 +20,7 @@ alongside as a Jupyter notebook; R users use this one, Python users use that one
 - the TEA-seq demo data — point the tutorial at it with
   `options(matilda.demo = "...", matilda.demo_formats = "...")` (the Rmd has
   sensible defaults), or edit the two paths near the top;
-- `zellkonverter` (`.h5ad`) and `Seurat` (10x + `.rds`) for the alternative loaders;
+- `rhdf5` (`.h5` + `.h5ad`) and `Seurat` (10x + `.rds`) for the data loaders;
   `scater` for the UMAPs; `ggplot2` for the plots.
 
 ## Run
