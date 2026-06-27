@@ -2,7 +2,7 @@
 # the tutorial downloads it on first use and caches it locally.
 
 # Download URL of the demo tarball; override with options(matilda.demo_url = ).
-.matilda_demo_url <- "https://zenodo.org/records/PLACEHOLDER/files/matilda_teaseq_demo.tar.gz"
+.matilda_demo_url <- "https://github.com/DSichang/Matilda-demo-data/releases/download/v1/matilda_teaseq_demo.tar.gz"
 
 #' Download the TEA-seq demo dataset used by the tutorial.
 #'
