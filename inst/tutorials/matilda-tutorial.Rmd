@@ -224,12 +224,14 @@ ggplot(big, aes(UMAP1, UMAP2, colour = grp)) +
   labs(x = NULL, y = NULL, title = "Real vs. simulated cells per modality (anchor: B.Naive)")
 ```
 
-# 7. The data types Matilda supports
+# 7. Modality combinations Matilda supports
 
-Matilda auto-detects the **mode** from the modalities present — `rna_only`, `CITEseq` (RNA+ADT),
-`SHAREseq` (RNA+ATAC), `TEAseq` (RNA+ADT+ATAC). Training each on the *same* real TEA-seq cells
-(a modality ablation — only TEA-seq ships with Matilda) shows what each modality buys; to run your
-own data of a type, just build the SCE with those modalities.
+Matilda works with **any combination of the three modalities** — RNA only, RNA + ADT, RNA + ATAC,
+or RNA + ADT + ATAC — and picks the matching model automatically from what you provide. (Internally
+Matilda labels these `rna_only` / `CITEseq` / `SHAREseq` / `TEAseq`, after the assays they typically
+come from, but your data needn't be those specific protocols — only the modalities present matter.)
+Training each combination on the *same* cells shows what each added modality buys; to use your own
+data, just build the SCE with whatever modalities you have.
 
 ```{r modality, fig.width = 7, fig.height = 4}
 keep_only <- function(s, keep) { for (ae in altExpNames(s)) if (!(ae %in% keep)) altExp(s, ae) <- NULL; s }

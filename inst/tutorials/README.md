@@ -11,7 +11,7 @@ Python tutorial with the same structure is available as a Jupyter notebook for `
 4. **Dimension reduction** (+ latent-space UMAP).
 5. **Feature selection** (+ marker-importance heatmap).
 6. **Simulation** (+ real-vs-simulated UMAPs per modality).
-7. **The data types Matilda supports** (`rna_only`/`CITEseq`/`SHAREseq`/`TEAseq`, + accuracy-by-modality bar).
+7. **Modality combinations Matilda supports** (RNA only / RNA+ADT / RNA+ATAC / RNA+ADT+ATAC, + accuracy bar).
 8. **Session info**.
 
 ## Requirements

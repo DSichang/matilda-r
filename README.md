@@ -136,8 +136,8 @@ Python, `matilda-sc` function API — is provided as a Jupyter notebook for Pyth
 4. **Dimension reduction** (+ latent-space UMAP).
 5. **Feature selection** (+ marker heatmap).
 6. **Simulation** (+ real-vs-synthetic UMAP).
-7. **The data types Matilda supports** — `rna_only` / `CITEseq` / `SHAREseq` / `TEAseq` on the
-   *same* TEA-seq cells (a modality ablation; adding the ADT panel helps most).
+7. **Modality combinations Matilda supports** — RNA only / RNA+ADT / RNA+ATAC / RNA+ADT+ATAC on the
+   *same* cells (a modality ablation; adding the ADT panel helps most).
 
 ```r
 rmarkdown::render("inst/tutorials/matilda-tutorial.Rmd")
