@@ -38,74 +38,47 @@ PALETTE <- c("#1f77b4","#aec7e8","#ff7f0e","#ffbb78","#2ca02c","#98df8a","#d6272
 
 # 1. Read your data
 
-Matilda's R interface takes a `SingleCellExperiment`: **RNA raw counts** in the main assay, **ADT**
-and **ATAC** (gene activity) as `altExp`s, and a cell-type column in `colData`. Below the *same*
-TEA-seq training cells are loaded from **four formats** — pick whichever matches your data.
+Matilda's R interface takes a `SingleCellExperiment` — **RNA raw counts** in the main assay, **ADT**
+and **ATAC** (gene activity) as `altExp`s, and a cell-type column in `colData`. Load each modality with
+the reader for its format; the demo ships the same training data in several formats, so here we read RNA
+from `.h5`, ADT from `.h5ad`, and ATAC from 10x just to show each reader — for your own data you'd
+normally use one format for all modalities. (A `Seurat` `.rds` works too — see the note below.)
 
-```{r build-sce}
-# assemble an SCE from three genes x cells matrices + a label vector
+```{r read-data}
+read_h5 <- function(path) {                                   # native Matilda .h5 (rhdf5) -> genes x cells
+  m     <- rhdf5::h5read(path, "matrix/data")
+  feats <- as.character(rhdf5::h5read(path, "matrix/features"))
+  cells <- as.character(rhdf5::h5read(path, "matrix/barcodes"))
+  if (nrow(m) == length(cells) && ncol(m) == length(feats)) m <- t(m)
+  dimnames(m) <- list(feats, cells); m
+}
+rd_h5ad <- function(p) {                                      # .h5ad (rhdf5, CSR) -> genes x cells
+  X   <- rhdf5::h5read(p, "X"); shp <- as.integer(rhdf5::h5readAttributes(p, "X")$shape)
+  m <- Matrix::sparseMatrix(i = rep(seq_len(shp[1]), diff(X$indptr)), j = X$indices + 1L,
+                            x = as.numeric(X$data), dims = shp)
+  m <- Matrix::t(m)
+  dimnames(m) <- list(as.character(rhdf5::h5read(p, "var/_index")),
+                      as.character(rhdf5::h5read(p, "obs/_index"))); as.matrix(m)
+}
+rd_10x <- function(d) as.matrix(Seurat::Read10X(d))           # 10x CellRanger (Seurat) -> genes x cells
+
 build_sce <- function(rna, adt, atac, cell_type) {
   sce <- SingleCellExperiment(assays = list(counts = as.matrix(rna)))
   altExp(sce, "ADT")  <- SummarizedExperiment(list(counts = as.matrix(adt)))
   altExp(sce, "ATAC") <- SummarizedExperiment(list(counts = as.matrix(atac)))
-  sce$cell_type <- cell_type
-  sce
+  sce$cell_type <- cell_type; sce
 }
 labels <- as.character(utils::read.csv(file.path(demo_h5, "train_cty.csv"), header = FALSE)[[2]])[-1]
-```
 
-## Format A — native Matilda `.h5` (`rhdf5`)
-
-```{r read-h5}
-read_h5 <- function(path) {
-  m     <- rhdf5::h5read(path, "matrix/data")
-  feats <- as.character(rhdf5::h5read(path, "matrix/features"))
-  cells <- as.character(rhdf5::h5read(path, "matrix/barcodes"))
-  if (nrow(m) == length(cells) && ncol(m) == length(feats)) m <- t(m)   # -> genes x cells
-  dimnames(m) <- list(feats, cells); m
-}
-g  <- function(mod) file.path(demo_h5, sprintf("train_%s.h5", mod))
-sce <- build_sce(read_h5(g("rna")), read_h5(g("adt")), read_h5(g("atac")), labels)
+sce <- build_sce(read_h5(file.path(demo_h5,  "train_rna.h5")),                 # native .h5
+                 rd_h5ad(file.path(demo_fmt, "train_adt.h5ad")),              # .h5ad
+                 rd_10x(file.path(demo_fmt,  "10x", "train_atac")),           # 10x CellRanger
+                 labels)
 sce
 ```
 
-## Format B — `.h5ad` (AnnData / scanpy)
-
-A `.h5ad` is just HDF5; read its CSR-sparse `X` with `rhdf5` (no extra Python needed). For a
-richer object you could use `zellkonverter::readH5AD()` instead.
-
-```{r read-h5ad}
-rd_h5ad <- function(p) {                                      # -> genes x cells
-  X     <- rhdf5::h5read(p, "X")                              # CSR: data / indices / indptr
-  shp   <- as.integer(rhdf5::h5readAttributes(p, "X")$shape)  # c(cells, genes)
-  genes <- as.character(rhdf5::h5read(p, "var/_index"))
-  cells <- as.character(rhdf5::h5read(p, "obs/_index"))
-  m <- Matrix::sparseMatrix(i = rep(seq_len(shp[1]), diff(X$indptr)),
-                            j = X$indices + 1L, x = as.numeric(X$data), dims = shp)  # cells x genes
-  m <- Matrix::t(m); dimnames(m) <- list(genes, cells); as.matrix(m)
-}
-h <- function(mod) file.path(demo_fmt, sprintf("train_%s.h5ad", mod))
-sce_h5ad <- build_sce(rd_h5ad(h("rna")), rd_h5ad(h("adt")), rd_h5ad(h("atac")), labels)
-```
-
-## Format C — 10x CellRanger (`Seurat::Read10X`)
-
-```{r read-10x, eval = requireNamespace("Seurat", quietly = TRUE)}
-rd_10x <- function(d) as.matrix(Seurat::Read10X(d))
-x <- function(mod) file.path(demo_fmt, "10x", sprintf("train_%s", mod))
-sce_10x <- build_sce(rd_10x(x("rna")), rd_10x(x("adt")), rd_10x(x("atac")), labels)
-```
-
-## Format D — a `Seurat` object (`.rds`)
-
-```{r read-rds, eval = requireNamespace("Seurat", quietly = TRUE)}
-seu  <- readRDS(file.path(demo_fmt, "train_seurat.rds"))            # RNA/ADT/ATAC assays + cell_type
-ga   <- function(a) as.matrix(SeuratObject::LayerData(seu, assay = a, layer = "counts"))
-sce_rds <- build_sce(ga("RNA"), ga("ADT"), ga("ATAC"), seu$cell_type)
-```
-
-All four give the same object, so the rest of the tutorial doesn't depend on the format. We
-continue with `sce` from Format A.
+A `Seurat` `.rds` (R-only) works the same way — pull each assay's counts and pass to `build_sce`:
+`seu <- readRDS(file.path(demo_fmt, "train_seurat.rds")); SeuratObject::LayerData(seu, assay = "RNA", layer = "counts")`.
 
 # 2. Train the Matilda model
 
