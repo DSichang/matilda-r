@@ -31,12 +31,9 @@ data_dir <- matilda_download_example()         # downloads + caches the TEA-seq 
 demo_h5  <- data_dir                            # native .h5 + _cty.csv
 demo_fmt <- file.path(data_dir, "formats")      # .h5ad / 10x / .rds
 
-# colour palettes used throughout
-CELLTYPE_COLORS <- c(
-  "B.Activated"="#1f77b4","B.Naive"="#aec7e8","DC.Myeloid"="#ff7f0e","Mono.CD14"="#ffbb78",
-  "Mono.CD16"="#2ca02c","NK"="#98df8a","Platelets"="#d62728","T.CD4.Memory"="#ff9896",
-  "T.CD4.Naive"="#9467bd","T.CD8.Effector"="#c5b0d5","T.CD8.Naive"="#8c564b")
-ANCHOR_COLORS <- c("anchor cell type"="#F8766D","other cell types"="#00BFC4")
+# a fixed colour list, assigned to whichever cell types your data has (works for any labels)
+PALETTE <- c("#1f77b4","#aec7e8","#ff7f0e","#ffbb78","#2ca02c","#98df8a","#d62728","#ff9896",
+             "#9467bd","#c5b0d5","#8c564b","#c49c94","#e377c2","#f7b6d2","#7f7f7f","#bcbd22","#17becf","#9edae5")
 ```
 
 # 1. Read your data
@@ -149,8 +146,10 @@ dim(reducedDim(sce, "MATILDA"))            # cells x z_dim (100)
 ```{r umap, fig.width = 7, fig.height = 5, eval = requireNamespace("scater", quietly = TRUE)}
 set.seed(42)
 sce <- scater::runUMAP(sce, dimred = "MATILDA", n_neighbors = 15L, min_dist = 0.1)
+cats <- sort(unique(as.character(sce$cell_type)))                 # colour whatever cell types the data has
+cols <- setNames(PALETTE[(seq_along(cats) - 1) %% length(PALETTE) + 1], cats)
 scater::plotUMAP(sce, colour_by = "cell_type") +
-  ggplot2::scale_colour_manual(values = CELLTYPE_COLORS) +
+  ggplot2::scale_colour_manual(values = cols) +
   ggtitle("Matilda integrated latent space (UMAP)")
 ```
 
@@ -217,7 +216,7 @@ big$panel <- factor(big$panel, levels = c("Real RNA", "Real ADT", "Real ATAC",
 ggplot(big, aes(UMAP1, UMAP2, colour = grp)) +
   geom_point(size = 0.5, alpha = 0.8) +
   facet_wrap(~ panel, nrow = 2, scales = "free") +
-  ggplot2::scale_colour_manual(values = ANCHOR_COLORS) +
+  ggplot2::scale_colour_manual(values = c("anchor cell type" = "#F8766D", "other cell types" = "#00BFC4")) +
   theme_classic() +
   theme(axis.text = element_blank(), axis.ticks = element_blank(),
         legend.title = element_blank(), aspect.ratio = 1) +
