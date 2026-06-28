@@ -31,7 +31,10 @@ Suggests:
     knitr,
     rmarkdown,
     BiocFileCache,
-    Seurat
+    Seurat,
+    scater,
+    uwot,
+    ggplot2
 SystemRequirements: Python (>= 3.7)
 biocViews: SingleCell, Classification, DimensionReduction, FeatureExtraction,
     NeuralNetwork, Software
