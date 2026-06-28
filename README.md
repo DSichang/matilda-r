@@ -19,7 +19,20 @@ sce <- matilda_reduce(sce)                        # reducedDim "MATILDA"
 sce <- matilda_classify(query, reference = sce)   # colData$matilda_pred / $matilda_prob
 mk  <- matilda_markers(sce)                        # per-cell-type feature importance
 sim <- matilda_simulate(sce, celltype = "B.Naive", n = 200)
+out <- matilda_transfer(sce, query, label = "cell_type")  # reference->query, auto feature intersection
 ```
+
+## Installation
+
+```r
+# install.packages("remotes")
+remotes::install_github("DSichang/matilda-r")
+```
+
+Python is provisioned automatically by `basilisk` on the first `matilda_train()` — you never
+install or manage Python or CUDA yourself. The Bioconductor dependencies (`SingleCellExperiment`,
+`SummarizedExperiment`, `MultiAssayExperiment`, `S4Vectors`, `rhdf5`, `HDF5Array`, `basilisk`)
+install most smoothly with `BiocManager` if `install_github` doesn't resolve them automatically.
 
 ---
 
