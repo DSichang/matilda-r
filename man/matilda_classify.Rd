@@ -2,15 +2,18 @@
 % Please edit documentation in R/tasks.R
 \name{matilda_classify}
 \alias{matilda_classify}
-\title{Classify cells with a trained Matilda model.}
+\title{Classify cells with a trained Matilda model (automatic feature reconciliation).}
 \usage{
 matilda_classify(
   x,
   reference = NULL,
   label = NULL,
+  query_label = NULL,
   assay = "counts",
   adt_exp = "ADT",
   atac_exp = "ATAC",
+  epochs = 30L,
+  seed = 1L,
   device = c("auto", "cpu", "cuda")
 )
 }
@@ -19,10 +22,15 @@ matilda_classify(
 
 \item{reference}{a trained object/model to use; \code{NULL} = use \code{x}'s own.}
 
-\item{label}{optional cell-type labels (a colData column name or a vector); required for
-\code{fs} / \code{simulation}, optional ground truth for \code{classification}.}
+\item{label}{reference cell-type label (a \code{colData} column name or vector). Needed only
+when a retrain is required (the query misses model features, or the reference is not yet
+trained). When \code{reference} is \code{NULL}, these are \code{x}'s own labels.}
+
+\item{query_label}{optional ground-truth labels for the query (adds the accuracy report).}
 
 \item{assay, adt_exp, atac_exp}{assay/altExp selectors.}
+
+\item{epochs, seed}{training options used only when a retrain is required.}
 
 \item{device}{"auto"/"cpu"/"cuda".}
 }
@@ -30,7 +38,16 @@ matilda_classify(
 \code{x} with \code{colData$matilda_pred}/\code{$matilda_prob}, or a list for matrices.
 }
 \description{
-Single-task wrapper over \code{\link{matilda_task}}.
+Labels \code{x} against a reference, deciding from the feature overlap whether it can reuse
+the reference's model or must retrain — so the call is the same whether or not the panels
+match. When \code{x} already carries its own model (no \code{reference}) it simply classifies
+\code{x}. When a \code{reference} is given: if \code{x} carries every feature the model was
+trained on (equal panel, or a superset) the query is sliced to the model's features and the
+model is **reused** (no retrain); if \code{x} is missing some of them (the common
+cross-dataset case) the per-modality **intersection** of reference and query is taken
+(reference order, real values only, no zero-padding), a model is **retrained** on it, and the
+query is classified. \code{metadata(.)$matilda_retrained} records which path ran and, when
+reconciled, \code{metadata(.)$matilda_common_features} the per-modality feature counts kept.
 }
 \examples{
 sce <- matilda_example_sce()

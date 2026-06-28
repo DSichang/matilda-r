@@ -19,7 +19,9 @@ sce <- matilda_reduce(sce)                        # reducedDim "MATILDA"
 sce <- matilda_classify(query, reference = sce)   # colData$matilda_pred / $matilda_prob
 mk  <- matilda_markers(sce)                        # per-cell-type feature importance
 sim <- matilda_simulate(sce, celltype = "B.Naive", n = 200)
-out <- matilda_transfer(sce, query, label = "cell_type")  # reference->query, auto feature intersection
+# different feature panels? the same matilda_classify() auto-takes the reference∩query
+# intersection and retrains (no zero-padding) — no separate function needed:
+out <- matilda_classify(query_diff_panel, reference = sce, label = "cell_type")
 ```
 
 ## Installation

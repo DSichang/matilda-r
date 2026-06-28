@@ -38,3 +38,4 @@ biocViews: SingleCell, Classification, DimensionReduction, FeatureExtraction,
 Config/testthat/edition: 3
 StagedInstall: no
 Config/roxygen2/version: 8.0.0
+RoxygenNote: 7.3.3

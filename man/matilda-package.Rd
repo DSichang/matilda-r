@@ -17,7 +17,6 @@ are written back into the input \link[SingleCellExperiment]{SingleCellExperiment
 
 Authors:
 \itemize{
-  \item Sichang Ding \email{usyddsc@gmail.com}
   \item Pengyi Yang
 }
 

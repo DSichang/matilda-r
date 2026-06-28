@@ -162,11 +162,25 @@ matilda_task <- function(x, reference = NULL,
   if (obj) x else res
 }
 
-#' Classify cells with a trained Matilda model.
+#' Classify cells with a trained Matilda model (automatic feature reconciliation).
 #'
-#' Single-task wrapper over \code{\link{matilda_task}}.
+#' Labels \code{x} against a reference, deciding from the feature overlap whether it can reuse
+#' the reference's model or must retrain — so the call is the same whether or not the panels
+#' match. When \code{x} already carries its own model (no \code{reference}) it simply classifies
+#' \code{x}. When a \code{reference} is given: if \code{x} carries every feature the model was
+#' trained on (equal panel, or a superset) the query is sliced to the model's features and the
+#' model is **reused** (no retrain); if \code{x} is missing some of them (the common
+#' cross-dataset case) the per-modality **intersection** of reference and query is taken
+#' (reference order, real values only, no zero-padding), a model is **retrained** on it, and the
+#' query is classified. \code{metadata(.)$matilda_retrained} records which path ran and, when
+#' reconciled, \code{metadata(.)$matilda_common_features} the per-modality feature counts kept.
 #'
 #' @inheritParams matilda_task
+#' @param label reference cell-type label (a \code{colData} column name or vector). Needed only
+#'   when a retrain is required (the query misses model features, or the reference is not yet
+#'   trained). When \code{reference} is \code{NULL}, these are \code{x}'s own labels.
+#' @param query_label optional ground-truth labels for the query (adds the accuracy report).
+#' @param epochs,seed training options used only when a retrain is required.
 #' @return \code{x} with \code{colData$matilda_pred}/\code{$matilda_prob}, or a list for matrices.
 #' @examples
 #' sce <- matilda_example_sce()
@@ -175,10 +189,63 @@ matilda_task <- function(x, reference = NULL,
 #'   sce <- matilda_classify(sce)
 #' }
 #' @export
-matilda_classify <- function(x, reference = NULL, label = NULL,
+matilda_classify <- function(x, reference = NULL, label = NULL, query_label = NULL,
                              assay = "counts", adt_exp = "ADT", atac_exp = "ATAC",
-                             device = c("auto", "cpu", "cuda")) {
+                             epochs = 30L, seed = 1L, device = c("auto", "cpu", "cuda")) {
   device <- match.arg(device)
+  if (!is.null(reference) && methods::is(x, "SingleCellExperiment")) {
+    m <- matilda_model(reference)
+    rfeat <- if (!is.null(m)) m$features
+             else if (methods::is(reference, "SingleCellExperiment"))
+               .sce_features(reference, adt_exp, atac_exp) else NULL
+    covered <- !is.null(rfeat) && .covers(rfeat, .sce_features(x, adt_exp, atac_exp))
+    if (!covered) {
+      # query misses some reference features -> intersect + retrain on the overlap
+      if (!methods::is(reference, "SingleCellExperiment")) {
+        stop("matilda_classify(): the query is missing model features, so it must retrain on ",
+             "the reference∩query intersection — pass `reference` as the labelled ",
+             "SingleCellExperiment (not a bare model) so its data is available.")
+      }
+      refmods <- names(.sce_features(reference, adt_exp, atac_exp))
+      qmods   <- names(.sce_features(x, adt_exp, atac_exp))
+      for (mod in setdiff(union(refmods, qmods), intersect(refmods, qmods)))
+        warning(sprintf("modality '%s' is present in only one of reference/query; it is dropped (only modalities present in both are used).", mod))
+      ix <- .intersect_sce(reference, x, adt_exp, atac_exp)
+      fit <- matilda_train(ix$reference, label = label, assay = assay, adt_exp = adt_exp,
+                           atac_exp = atac_exp, epochs = epochs, seed = seed, device = device)
+      out <- matilda_task(ix$query, reference = fit, classification = TRUE,
+                          label = query_label, assay = assay, adt_exp = adt_exp,
+                          atac_exp = atac_exp, device = device)
+      if (.is_se(out)) {
+        S4Vectors::metadata(out)$matilda_common_features <- ix$common
+        S4Vectors::metadata(out)$matilda_retrained <- TRUE
+      }
+      return(out)
+    }
+    # covered -> reuse: train the reference if it has no model yet, slice the query to the
+    # model's features (drop extras, fix order), then classify.
+    ref <- reference
+    if (is.null(m)) {
+      ref <- matilda_train(reference, label = label, assay = assay, adt_exp = adt_exp,
+                           atac_exp = atac_exp, epochs = epochs, seed = seed, device = device)
+      m <- matilda_model(ref)
+    }
+    x <- .slice_to_features(x, m$features, adt_exp, atac_exp)
+    out <- matilda_task(x, reference = ref, classification = TRUE, label = query_label,
+                        assay = assay, adt_exp = adt_exp, atac_exp = atac_exp, device = device)
+    if (.is_se(out)) {                                  # report on both paths (mirror Python)
+      S4Vectors::metadata(out)$matilda_common_features <- lengths(Filter(length, m$features))
+      S4Vectors::metadata(out)$matilda_retrained <- FALSE
+    }
+    return(out)
+  }
+  if (!is.null(reference) && !methods::is(x, "SingleCellExperiment")) {
+    # MAE / matrix-list queries can't be auto-reconciled here (intersect/slice are SCE-only);
+    # warn so a mismatched panel isn't silently mispredicted by the positional engine.
+    warning("matilda_classify(): automatic feature reconciliation runs only for a ",
+            "SingleCellExperiment query; for a ", class(x)[1], " query, ensure its features ",
+            "already match the reference model (mismatched panels are not reconciled here).")
+  }
   out <- matilda_task(x, reference = reference, classification = TRUE, label = label,
                       assay = assay, adt_exp = adt_exp, atac_exp = atac_exp, device = device)
   if (.is_se(x)) out else out$classification
@@ -310,11 +377,49 @@ matilda_task_files <- function(model, rna, adt = NULL, atac = NULL, cty,
   invisible(normalizePath(outdir))
 }
 
+#' Per-modality feature names of an SCE ({rna, adt, atac}; adt/atac only if the altExp exists).
+#' @keywords internal
+.sce_features <- function(sce, adt_exp = "ADT", atac_exp = "ATAC") {
+  f <- list(rna = rownames(sce))
+  ae <- SingleCellExperiment::altExpNames(sce)
+  if (adt_exp %in% ae)  f$adt  <- rownames(SingleCellExperiment::altExp(sce, adt_exp))
+  if (atac_exp %in% ae) f$atac <- rownames(SingleCellExperiment::altExp(sce, atac_exp))
+  f
+}
+
+#' TRUE iff the query supplies every feature (per modality) the model was trained on.
+#' @keywords internal
+.covers <- function(rfeat, qfeat) {
+  for (m in names(rfeat)) {
+    rf <- rfeat[[m]]
+    if (is.null(rf)) next
+    qf <- qfeat[[m]]
+    if (is.null(qf) || !all(rf %in% qf)) return(FALSE)
+  }
+  TRUE
+}
+
+#' Slice an SCE to the model's exact features + order (drop extra features / altExps).
+#' @keywords internal
+.slice_to_features <- function(sce, feats, adt_exp = "ADT", atac_exp = "ATAC") {
+  s <- sce[feats$rna, ]
+  keep <- c(if (!is.null(feats$adt)) adt_exp, if (!is.null(feats$atac)) atac_exp)
+  for (ae in SingleCellExperiment::altExpNames(s)) {
+    if (ae %in% keep) {
+      sub <- if (ae == adt_exp) feats$adt else feats$atac
+      SingleCellExperiment::altExp(s, ae) <- SingleCellExperiment::altExp(sce, ae)[sub, ]
+    } else {
+      SingleCellExperiment::altExp(s, ae) <- NULL
+    }
+  }
+  s
+}
+
 #' @keywords internal
 .intersect_sce <- function(reference, query, adt_exp = "ADT", atac_exp = "ATAC") {
   if (!methods::is(reference, "SingleCellExperiment") ||
       !methods::is(query, "SingleCellExperiment")) {
-    stop("matilda_transfer() needs SingleCellExperiment reference and query (with feature rownames).")
+    stop("matilda_classify() needs SingleCellExperiment reference and query (with feature rownames).")
   }
   rc <- intersect(rownames(reference), rownames(query))          # reference order
   if (!length(rc)) stop("reference and query share no common RNA features.")
@@ -335,52 +440,4 @@ matilda_task_files <- function(model, rna, adt = NULL, atac = NULL, cty,
   for (ae in setdiff(SingleCellExperiment::altExpNames(qry_s), shared))
     SingleCellExperiment::altExp(qry_s, ae) <- NULL
   list(reference = ref_s, query = qry_s, common = common)
-}
-
-#' Transfer labels from a labelled reference to a query with partially-overlapping features.
-#'
-#' Computes the per-modality **feature intersection** (in reference order), trains a model on
-#' the intersection, and applies it to the query — real values only, **no zero-padding**. The
-#' R counterpart of Python's \code{matilda.transfer()}. Use it when the query both misses some
-#' reference features and adds others. Because the model is trained on the reference \eqn{\cap}
-#' query feature set, both objects are needed together (a different query \eqn{\to} a different
-#' intersection \eqn{\to} its own model). Only modalities (RNA + matching \code{altExp}s)
-#' present in both are used.
-#'
-#' @param reference,query \code{SingleCellExperiment}s (\code{reference} is labelled).
-#' @param label reference cell-type label (a \code{colData} column name or a vector).
-#' @param query_label optional ground-truth labels for the query (adds the accuracy report).
-#' @param classification,dim_reduce,fs,simulation task flags; any combination may be TRUE.
-#' @param fs_method "IntegratedGradient" (default) or "Saliency".
-#' @param simulation_ct,simulation_num simulation options.
-#' @param assay,adt_exp,atac_exp assay/altExp selectors.
-#' @param epochs,seed training options.
-#' @param device "auto"/"cpu"/"cuda".
-#' @return the query object enriched with the requested results (see \code{\link{matilda_task}});
-#'   \code{metadata(.)$matilda_common_features} records how many features each modality kept.
-#' @examples
-#' \donttest{
-#'   ref <- matilda_example_sce(); qry <- matilda_example_sce()
-#'   out <- matilda_transfer(ref, qry, label = "cell_type", epochs = 2L)
-#' }
-#' @export
-matilda_transfer <- function(reference, query, label, query_label = NULL,
-                             classification = TRUE, dim_reduce = FALSE, fs = FALSE,
-                             simulation = FALSE,
-                             fs_method = c("IntegratedGradient", "Saliency"),
-                             simulation_ct = NULL, simulation_num = 100L,
-                             assay = "counts", adt_exp = "ADT", atac_exp = "ATAC",
-                             epochs = 30L, seed = 1L, device = c("auto", "cpu", "cuda")) {
-  fs_method <- match.arg(fs_method); device <- match.arg(device)
-  ix <- .intersect_sce(reference, query, adt_exp, atac_exp)
-  fit <- matilda_train(ix$reference, label = label, assay = assay,
-                       adt_exp = adt_exp, atac_exp = atac_exp,
-                       epochs = epochs, seed = seed, device = device)
-  out <- matilda_task(ix$query, reference = fit, classification = classification,
-                      dim_reduce = dim_reduce, fs = fs, simulation = simulation,
-                      fs_method = fs_method, simulation_ct = simulation_ct,
-                      simulation_num = simulation_num, label = query_label,
-                      assay = assay, adt_exp = adt_exp, atac_exp = atac_exp, device = device)
-  if (.is_se(out)) S4Vectors::metadata(out)$matilda_common_features <- ix$common
-  out
 }

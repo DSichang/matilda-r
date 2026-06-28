@@ -226,15 +226,24 @@ on this dataset.
 
 # 8. Reference → query with different features
 
-Real query data rarely has the *exact* same features as the reference — usually it misses some and
-adds others. `matilda_transfer()` takes the per-modality feature **intersection** (real values, **no
-zero-padding**), trains on it, and classifies the query. Pass the reference and query objects
-together; only features present in **both** are used.
+Real query data rarely shares the reference's exact panel — usually it misses some features and adds
+others. You don't switch functions for this: it is the **same `matilda_classify()` call** as §3.
+Because the query below is missing features the model needs, `matilda_classify()` takes the
+per-modality feature **intersection** of reference and query (real values, **no zero-padding**),
+retrains on it, and classifies — so `metadata(.)$matilda_retrained` is now `TRUE`. Only features
+present in **both** are used. Here we build the query, see how its panel differs, then run the one
+call end-to-end.
 
 ```{r transfer}
-query_small <- query[2001:nrow(query), ]      # a query profiled on a smaller gene panel
-out <- matilda_transfer(sce, query_small, label = "cell_type", query_label = "cell_type")
-S4Vectors::metadata(out)$matilda_common_features
+# build a query profiled on a smaller gene panel: drop 2000 of the reference's RNA genes
+query_small <- query[2001:nrow(query), ]
+cat(sprintf("reference RNA genes: %d | query RNA genes: %d | shared: %d\n",
+            nrow(sce), nrow(query_small), length(intersect(rownames(sce), rownames(query_small)))))
+
+# the same call as §3 — classify detects the missing features and retrains on the overlap
+out <- matilda_classify(query_small, reference = sce, label = "cell_type")
+S4Vectors::metadata(out)$matilda_retrained         # TRUE -> it reconciled features + retrained
+S4Vectors::metadata(out)$matilda_common_features   # features kept per modality
 sprintf("query accuracy on the intersection = %.4f", mean(out$matilda_pred == out$cell_type))
 ```
 
