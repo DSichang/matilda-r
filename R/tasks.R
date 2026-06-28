@@ -309,3 +309,78 @@ matilda_task_files <- function(model, rna, adt = NULL, atac = NULL, cty,
   if (length(files)) file.copy(files, outdir, recursive = TRUE)
   invisible(normalizePath(outdir))
 }
+
+#' @keywords internal
+.intersect_sce <- function(reference, query, adt_exp = "ADT", atac_exp = "ATAC") {
+  if (!methods::is(reference, "SingleCellExperiment") ||
+      !methods::is(query, "SingleCellExperiment")) {
+    stop("matilda_transfer() needs SingleCellExperiment reference and query (with feature rownames).")
+  }
+  rc <- intersect(rownames(reference), rownames(query))          # reference order
+  if (!length(rc)) stop("reference and query share no common RNA features.")
+  ref_s <- reference[rc, ]; qry_s <- query[rc, ]
+  common <- c(rna = length(rc))
+  shared <- intersect(SingleCellExperiment::altExpNames(reference),
+                      SingleCellExperiment::altExpNames(query))
+  for (ae in shared) {
+    a <- intersect(rownames(SingleCellExperiment::altExp(reference, ae)),
+                   rownames(SingleCellExperiment::altExp(query, ae)))
+    if (!length(a)) stop(sprintf("reference and query share no common features in altExp '%s'.", ae))
+    SingleCellExperiment::altExp(ref_s, ae) <- SingleCellExperiment::altExp(reference, ae)[a, ]
+    SingleCellExperiment::altExp(qry_s, ae) <- SingleCellExperiment::altExp(query, ae)[a, ]
+    common[ae] <- length(a)
+  }
+  for (ae in setdiff(SingleCellExperiment::altExpNames(ref_s), shared))
+    SingleCellExperiment::altExp(ref_s, ae) <- NULL
+  for (ae in setdiff(SingleCellExperiment::altExpNames(qry_s), shared))
+    SingleCellExperiment::altExp(qry_s, ae) <- NULL
+  list(reference = ref_s, query = qry_s, common = common)
+}
+
+#' Transfer labels from a labelled reference to a query with partially-overlapping features.
+#'
+#' Computes the per-modality **feature intersection** (in reference order), trains a model on
+#' the intersection, and applies it to the query — real values only, **no zero-padding**. The
+#' R counterpart of Python's \code{matilda.transfer()}. Use it when the query both misses some
+#' reference features and adds others. Because the model is trained on the reference \eqn{\cap}
+#' query feature set, both objects are needed together (a different query \eqn{\to} a different
+#' intersection \eqn{\to} its own model). Only modalities (RNA + matching \code{altExp}s)
+#' present in both are used.
+#'
+#' @param reference,query \code{SingleCellExperiment}s (\code{reference} is labelled).
+#' @param label reference cell-type label (a \code{colData} column name or a vector).
+#' @param query_label optional ground-truth labels for the query (adds the accuracy report).
+#' @param classification,dim_reduce,fs,simulation task flags; any combination may be TRUE.
+#' @param fs_method "IntegratedGradient" (default) or "Saliency".
+#' @param simulation_ct,simulation_num simulation options.
+#' @param assay,adt_exp,atac_exp assay/altExp selectors.
+#' @param epochs,seed training options.
+#' @param device "auto"/"cpu"/"cuda".
+#' @return the query object enriched with the requested results (see \code{\link{matilda_task}});
+#'   \code{metadata(.)$matilda_common_features} records how many features each modality kept.
+#' @examples
+#' \donttest{
+#'   ref <- matilda_example_sce(); qry <- matilda_example_sce()
+#'   out <- matilda_transfer(ref, qry, label = "cell_type", epochs = 2L)
+#' }
+#' @export
+matilda_transfer <- function(reference, query, label, query_label = NULL,
+                             classification = TRUE, dim_reduce = FALSE, fs = FALSE,
+                             simulation = FALSE,
+                             fs_method = c("IntegratedGradient", "Saliency"),
+                             simulation_ct = NULL, simulation_num = 100L,
+                             assay = "counts", adt_exp = "ADT", atac_exp = "ATAC",
+                             epochs = 30L, seed = 1L, device = c("auto", "cpu", "cuda")) {
+  fs_method <- match.arg(fs_method); device <- match.arg(device)
+  ix <- .intersect_sce(reference, query, adt_exp, atac_exp)
+  fit <- matilda_train(ix$reference, label = label, assay = assay,
+                       adt_exp = adt_exp, atac_exp = atac_exp,
+                       epochs = epochs, seed = seed, device = device)
+  out <- matilda_task(ix$query, reference = fit, classification = classification,
+                      dim_reduce = dim_reduce, fs = fs, simulation = simulation,
+                      fs_method = fs_method, simulation_ct = simulation_ct,
+                      simulation_num = simulation_num, label = query_label,
+                      assay = assay, adt_exp = adt_exp, atac_exp = atac_exp, device = device)
+  if (.is_se(out)) S4Vectors::metadata(out)$matilda_common_features <- ix$common
+  out
+}
