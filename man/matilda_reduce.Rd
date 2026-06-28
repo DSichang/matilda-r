@@ -19,7 +19,8 @@ matilda_reduce(
 
 \item{reference}{a trained object/model to use; \code{NULL} = use \code{x}'s own.}
 
-\item{label}{optional cell-type labels for the ground-truth column of the report.}
+\item{label}{optional cell-type labels (a colData column name or a vector); required for
+\code{fs} / \code{simulation}, optional ground truth for \code{classification}.}
 
 \item{assay, adt_exp, atac_exp}{assay/altExp selectors.}
 
@@ -29,7 +30,7 @@ matilda_reduce(
 \code{x} with \code{reducedDim "MATILDA"}, or a list for matrices.
 }
 \description{
-Project cells into the Matilda integrated latent space.
+Single-task wrapper over \code{\link{matilda_task}}.
 }
 \examples{
 sce <- matilda_example_sce()

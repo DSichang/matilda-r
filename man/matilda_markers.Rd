@@ -20,7 +20,8 @@ matilda_markers(
 
 \item{reference}{a trained object/model to use; \code{NULL} = use \code{x}'s own.}
 
-\item{label}{optional cell-type labels for the ground-truth column of the report.}
+\item{label}{optional cell-type labels (a colData column name or a vector); required for
+\code{fs} / \code{simulation}, optional ground truth for \code{classification}.}
 
 \item{method}{"IntegratedGradient" (default) or "Saliency".}
 
@@ -32,7 +33,7 @@ matilda_markers(
 data.frame(celltype, feature, importance).
 }
 \description{
-Per-cell-type feature importance (markers) via integrated gradients / saliency.
+Single-task wrapper over \code{\link{matilda_task}}.
 }
 \examples{
 sce <- matilda_example_sce()

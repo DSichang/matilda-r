@@ -1,5 +1,10 @@
 # Downstream tasks: data-first, object-carries-model, results written back.
 
+#' @keywords internal
+.is_se <- function(x) {
+  methods::is(x, "SummarizedExperiment") || methods::is(x, "MultiAssayExperiment")
+}
+
 #' Shared task runner: stage a run dir, seed the model, write inputs, run the script.
 #' @keywords internal
 .run_task <- function(model, x, label, flags, query, assay, adt_exp, atac_exp, device) {
@@ -73,13 +78,95 @@
   sce
 }
 
-#' Classify cells with a trained Matilda model.
+#' Run one or more Matilda tasks in a single call (object in, enriched object out).
+#'
+#' The combinable counterpart of the single-task verbs (\code{matilda_classify} /
+#' \code{matilda_reduce} / \code{matilda_markers} / \code{matilda_simulate}), which are thin
+#' wrappers over it. Mirrors the Python \code{matilda.task()}: enable any combination of
+#' tasks and they run in a single engine pass (the model loads once). Results are written
+#' back into the returned object — classification to \code{colData$matilda_pred} /
+#' \code{$matilda_prob}, dim_reduce to \code{reducedDim "MATILDA"}, fs to
+#' \code{metadata$matilda_markers} (a data.frame), simulation to
+#' \code{metadata$matilda_simulation} (a SingleCellExperiment whose \code{metadata(.)$real}
+#' holds the real reference cells). For a plain matrix list, a named results list is returned.
+#'
+#' (Unlike Python's \code{task()}, which returns a \code{TaskResult}, the R form returns the
+#' enriched object — the idiomatic Bioconductor pattern.)
 #'
 #' @param x SCE/MAE (with a model, or a query) / matrix list.
 #' @param reference a trained object/model to use; \code{NULL} = use \code{x}'s own.
-#' @param label optional cell-type labels for the ground-truth column of the report.
+#' @param classification,dim_reduce,fs,simulation task flags; any combination may be TRUE.
+#' @param fs_method "IntegratedGradient" (default) or "Saliency".
+#' @param simulation_ct cell type to simulate (\code{NULL} = all types).
+#' @param simulation_num number of cells to simulate.
+#' @param label optional cell-type labels (a colData column name or a vector); required for
+#'   \code{fs} / \code{simulation}, optional ground truth for \code{classification}.
 #' @param assay,adt_exp,atac_exp assay/altExp selectors.
 #' @param device "auto"/"cpu"/"cuda".
+#' @return \code{x} enriched with the requested results (a named list for matrix input).
+#' @examples
+#' sce <- matilda_example_sce()
+#' \donttest{
+#'   sce <- matilda_train(sce, label = "cell_type", epochs = 2L)
+#'   sce <- matilda_task(sce, classification = TRUE, dim_reduce = TRUE)
+#' }
+#' @export
+matilda_task <- function(x, reference = NULL,
+                         classification = FALSE, dim_reduce = FALSE, fs = FALSE,
+                         simulation = FALSE,
+                         fs_method = c("IntegratedGradient", "Saliency"),
+                         simulation_ct = NULL, simulation_num = 100L, label = NULL,
+                         assay = "counts", adt_exp = "ADT", atac_exp = "ATAC",
+                         device = c("auto", "cpu", "cuda")) {
+  fs_method <- match.arg(fs_method); device <- match.arg(device)
+  if (!(classification || dim_reduce || fs || simulation)) {
+    stop("matilda_task(): enable at least one of classification/dim_reduce/fs/simulation.")
+  }
+  model <- .resolve_model(x, reference)
+  lbl <- label
+  if ((fs || simulation) && is.null(lbl)) lbl <- model$label_col
+  if ((fs || simulation) && is.null(lbl)) {
+    stop("fs/simulation need cell-type labels; pass label= (a colData column name or a vector).")
+  }
+  ct <- if (is.null(simulation_ct)) "-1" else as.character(simulation_ct)
+  flags <- c(
+    if (classification) c("--classification", "True"),
+    if (dim_reduce)     c("--dim_reduce", "True"),
+    if (fs)             c("--fs", "True", "--fs_method", fs_method),
+    if (simulation)     c("--simulation", "True", "--simulation_ct", ct,
+                          "--simulation_num", as.character(as.integer(simulation_num))))
+  r <- .run_task(model, x, lbl, flags, query = !is.null(reference),
+                 assay, adt_exp, atac_exp, device)
+  on.exit(unlink(r$rundir, recursive = TRUE), add = TRUE)
+  obj <- .is_se(x); res <- list()
+  if (classification) {
+    df <- .parse_classification(
+      file.path(r$out, "classification", model$mode, r$sub, "accuracy_each_cell.txt"))
+    if (obj) x <- .write_back_pred(x, df$predicted, df$prob)
+    else res$classification <- list(pred = df$predicted, prob = df$prob)
+  }
+  if (dim_reduce) {
+    L <- .read_latent(file.path(r$out, "dim_reduce", model$mode, r$sub, "latent_space.csv"))
+    if (obj) x <- .write_back_latent(x, L) else res$latent <- L
+  }
+  if (fs) {
+    mk <- .read_markers(file.path(r$out, "marker", model$mode, r$sub))
+    if (obj) S4Vectors::metadata(x)$matilda_markers <- mk else res$markers <- mk
+  }
+  if (simulation) {
+    sim <- .read_sim(file.path(r$out, "simulation_result", model$mode, r$sub))
+    out <- .build_sim(sim$sim, model$mode)
+    if (methods::is(out, "SingleCellExperiment")) S4Vectors::metadata(out)$real <- sim$real
+    if (obj) S4Vectors::metadata(x)$matilda_simulation <- out else res$simulation <- out
+  }
+  if (obj) x else res
+}
+
+#' Classify cells with a trained Matilda model.
+#'
+#' Single-task wrapper over \code{\link{matilda_task}}.
+#'
+#' @inheritParams matilda_task
 #' @return \code{x} with \code{colData$matilda_pred}/\code{$matilda_prob}, or a list for matrices.
 #' @examples
 #' sce <- matilda_example_sce()
@@ -92,18 +179,16 @@ matilda_classify <- function(x, reference = NULL, label = NULL,
                              assay = "counts", adt_exp = "ADT", atac_exp = "ATAC",
                              device = c("auto", "cpu", "cuda")) {
   device <- match.arg(device)
-  model <- .resolve_model(x, reference)
-  r <- .run_task(model, x, label, c("--classification", "True"),
-                 query = !is.null(reference), assay, adt_exp, atac_exp, device)
-  on.exit(unlink(r$rundir, recursive = TRUE), add = TRUE)
-  f <- file.path(r$out, "classification", model$mode, r$sub, "accuracy_each_cell.txt")
-  df <- .parse_classification(f)
-  .write_back_pred(x, df$predicted, df$prob)
+  out <- matilda_task(x, reference = reference, classification = TRUE, label = label,
+                      assay = assay, adt_exp = adt_exp, atac_exp = atac_exp, device = device)
+  if (.is_se(x)) out else out$classification
 }
 
 #' Project cells into the Matilda integrated latent space.
 #'
-#' @inheritParams matilda_classify
+#' Single-task wrapper over \code{\link{matilda_task}}.
+#'
+#' @inheritParams matilda_task
 #' @return \code{x} with \code{reducedDim "MATILDA"}, or a list for matrices.
 #' @examples
 #' sce <- matilda_example_sce()
@@ -116,17 +201,16 @@ matilda_reduce <- function(x, reference = NULL, label = NULL,
                            assay = "counts", adt_exp = "ADT", atac_exp = "ATAC",
                            device = c("auto", "cpu", "cuda")) {
   device <- match.arg(device)
-  model <- .resolve_model(x, reference)
-  r <- .run_task(model, x, label, c("--dim_reduce", "True"),
-                 query = !is.null(reference), assay, adt_exp, atac_exp, device)
-  on.exit(unlink(r$rundir, recursive = TRUE), add = TRUE)
-  L <- .read_latent(file.path(r$out, "dim_reduce", model$mode, r$sub, "latent_space.csv"))
-  .write_back_latent(x, L)
+  out <- matilda_task(x, reference = reference, dim_reduce = TRUE, label = label,
+                      assay = assay, adt_exp = adt_exp, atac_exp = atac_exp, device = device)
+  if (.is_se(x)) out else list(latent = out$latent)
 }
 
 #' Per-cell-type feature importance (markers) via integrated gradients / saliency.
 #'
-#' @inheritParams matilda_classify
+#' Single-task wrapper over \code{\link{matilda_task}}.
+#'
+#' @inheritParams matilda_task
 #' @param method "IntegratedGradient" (default) or "Saliency".
 #' @return data.frame(celltype, feature, importance).
 #' @examples
@@ -141,20 +225,16 @@ matilda_markers <- function(x, reference = NULL, label = NULL,
                             assay = "counts", adt_exp = "ADT", atac_exp = "ATAC",
                             device = c("auto", "cpu", "cuda")) {
   method <- match.arg(method); device <- match.arg(device)
-  model <- .resolve_model(x, reference)
-  if (is.null(label)) label <- model$label_col
-  if (is.null(label)) {
-    stop("matilda_markers needs cell-type labels; pass label= (a colData column or a vector).")
-  }
-  r <- .run_task(model, x, label, c("--fs", "True", "--fs_method", method),
-                 query = !is.null(reference), assay, adt_exp, atac_exp, device)
-  on.exit(unlink(r$rundir, recursive = TRUE), add = TRUE)
-  .read_markers(file.path(r$out, "marker", model$mode, r$sub))
+  out <- matilda_task(x, reference = reference, fs = TRUE, fs_method = method, label = label,
+                      assay = assay, adt_exp = adt_exp, atac_exp = atac_exp, device = device)
+  if (.is_se(x)) S4Vectors::metadata(out)$matilda_markers else out$markers
 }
 
 #' Simulate cells for a cell type (or all types) from a trained model.
 #'
-#' @inheritParams matilda_classify
+#' Single-task wrapper over \code{\link{matilda_task}}.
+#'
+#' @inheritParams matilda_task
 #' @param celltype cell-type name to simulate; \code{NULL} = all types.
 #' @param n number of cells to simulate.
 #' @return a SingleCellExperiment of simulated cells. \code{metadata(.)$real}
@@ -172,22 +252,10 @@ matilda_simulate <- function(x, reference = NULL, celltype = NULL, n = 100L, lab
                              assay = "counts", adt_exp = "ADT", atac_exp = "ATAC",
                              device = c("auto", "cpu", "cuda")) {
   device <- match.arg(device)
-  model <- .resolve_model(x, reference)
-  if (is.null(label)) label <- model$label_col
-  if (is.null(label)) stop("matilda_simulate needs cell-type labels; pass label=.")
-  ct <- if (is.null(celltype)) "-1" else as.character(celltype)
-  r <- .run_task(model, x, label,
-                 c("--simulation", "True", "--simulation_ct", ct,
-                   "--simulation_num", as.character(as.integer(n))),
-                 query = !is.null(reference), assay, adt_exp, atac_exp, device)
-  on.exit(unlink(r$rundir, recursive = TRUE), add = TRUE)
-  sim <- .read_sim(file.path(r$out, "simulation_result", model$mode, r$sub))
-  out <- .build_sim(sim$sim, model$mode)
-  # also expose the real reference data Matilda used (same feature space as the
-  # simulated cells) so callers can draw the official real-vs-simulated UMAPs.
-  if (methods::is(out, "SingleCellExperiment"))
-    S4Vectors::metadata(out)$real <- sim$real
-  out
+  out <- matilda_task(x, reference = reference, simulation = TRUE,
+                      simulation_ct = celltype, simulation_num = n, label = label,
+                      assay = assay, adt_exp = adt_exp, atac_exp = atac_exp, device = device)
+  if (.is_se(x)) S4Vectors::metadata(out)$matilda_simulation else out$simulation
 }
 
 #' Run Matilda tasks from file paths (mirrors main_matilda_task.py); writes to outdir.

@@ -25,7 +25,8 @@ matilda_simulate(
 
 \item{n}{number of cells to simulate.}
 
-\item{label}{optional cell-type labels for the ground-truth column of the report.}
+\item{label}{optional cell-type labels (a colData column name or a vector); required for
+\code{fs} / \code{simulation}, optional ground truth for \code{classification}.}
 
 \item{assay, adt_exp, atac_exp}{assay/altExp selectors.}
 
@@ -38,7 +39,7 @@ a SingleCellExperiment of simulated cells. \code{metadata(.)$real}
   feature space as the simulation (for real-vs-simulated UMAPs).
 }
 \description{
-Simulate cells for a cell type (or all types) from a trained model.
+Single-task wrapper over \code{\link{matilda_task}}.
 }
 \examples{
 sce <- matilda_example_sce()
