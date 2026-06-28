@@ -54,6 +54,10 @@
   if (is.null(cty)) {
     stop("No cell-type labels: supply `label` (a colData column name or a vector).")
   }
+  if (anyNA(cty)) {
+    stop("cell-type labels contain missing values (NA); drop or annotate those cells ",
+         "before training -- Matilda has no 'unlabelled' class.")
+  }
   list(rna = rmat, adt = amat, atac = tmat, cty = as.character(cty),
        mode = .mode_of(!is.null(amat), !is.null(tmat)))
 }
