@@ -17,11 +17,6 @@ train → classification → dimension reduction → feature selection → simul
 different data types Matilda supports. (Python users: a parallel tutorial with the same structure
 is available as a Jupyter notebook.)
 
-> **Reproducibility — exact numbers depend on your environment.** The R and Python interfaces are
-> bit-identical *only* on the **same PyTorch version and the same device** (GPU/CPU). They match
-> exactly on a fixed server, but differ slightly on Colab or another machine. Expect query accuracy
-> **around 0.81**; per-cell-type accuracies and the top markers (which are *rankings*) can shift more.
-
 ## Requirements
 
 - **R**: `matilda`, `SingleCellExperiment`; `Seurat` for the `10x` and `.rds` loaders; `scater`
