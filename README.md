@@ -96,31 +96,30 @@ The R layer is a thin, faithful driver; all the modeling math lives in the vendo
 
 ## API reference
 
-Every R verb maps one-to-one to a Python CLI invocation (the R wrapper builds the argv and runs
-the script). `device = c("auto","cpu","cuda")` on every call. Supplying `reference=` (object API)
-or `query = TRUE` (file API) ⇒ the `--query True` branch.
+Each R verb has a one-to-one counterpart in the Python `matilda-sc` package
+(`import matilda`). `device = c("auto","cpu","cuda")` on every call.
 
 ### Train
 
-| R | Python | Effect |
+| R | Python (`matilda-sc`) | Effect |
 |---|--------|--------|
-| `matilda_train(x, label, assay="counts", adt_exp="ADT", atac_exp="ATAC", batch_size=64, epochs=30, lr=0.02, z_dim=100, hidden_rna=185, hidden_adt=30, hidden_atac=185, augmentation=TRUE, seed=1, device)` | `main_matilda_train.py --rna --adt --atac --cty [--batch_size --epochs --lr --z_dim --hidden_* --seed --augmentation]` | train on an SCE/MAE/Seurat (or matrices); store model in `metadata(x)$matilda`; return `x` |
-| `matilda_train_files(rna, adt=NULL, atac=NULL, cty, …same hyperparams…, device)` | same script | train from file paths; return a `matilda_model` |
+| `matilda_train(x, label, assay="counts", adt_exp="ADT", atac_exp="ATAC", batch_size=64, epochs=30, lr=0.02, z_dim=100, hidden_rna=185, hidden_adt=30, hidden_atac=185, augmentation=TRUE, seed=1, device)` | `matilda.train(rna, adt=None, atac=None, labels=, batch_size=64, epochs=30, lr=0.02, z_dim=100, hidden_rna=185, hidden_adt=30, hidden_atac=185, augmentation=True, seed=1, device="auto")` | train on an SCE/MAE/Seurat (or matrices); store model in `metadata(x)$matilda`; return `x` |
+| `matilda_train_files(rna, adt=NULL, atac=NULL, cty, …same hyperparams…, device)` | same — pass file paths as `rna`/`adt`/`atac` | train from file paths; return a `matilda_model` |
 
 ### Tasks — object API (model carried in the object, results written back)
 
-| R | Python | Returns / writes back |
+| R | Python (`matilda-sc`) | Returns / writes back |
 |---|--------|-----------------------|
-| `matilda_classify(x, reference=NULL, label=NULL, assay, adt_exp, atac_exp, device)` | `main_matilda_task.py --classification True [--query True]` | `colData$matilda_pred`, `$matilda_prob` |
-| `matilda_reduce(x, reference=NULL, …)` | `--dim_reduce True [--query True]` | `reducedDim(x, "MATILDA")` |
-| `matilda_markers(x, reference=NULL, method=c("IntegratedGradient","Saliency"), …)` | `--fs True --fs_method <method> [--query True]` | `data.frame(celltype, feature, importance)` |
-| `matilda_simulate(x, reference=NULL, celltype=NULL, n=100, label=NULL, …)` | `--simulation True --simulation_ct <celltype \| -1> --simulation_num <n> [--query True]` | a simulated `SingleCellExperiment` (`celltype=NULL` ⇒ `-1` = all cells) |
+| `matilda_classify(x, reference=NULL, label=NULL, assay, adt_exp, atac_exp, device)` | `matilda.classify(query, model=fit, reference=, labels=, query_labels=)` | `colData$matilda_pred`, `$matilda_prob` |
+| `matilda_reduce(x, reference=NULL, …)` | `matilda.reduce(data, model=fit)` | `reducedDim(x, "MATILDA")` |
+| `matilda_markers(x, reference=NULL, method=c("IntegratedGradient","Saliency"), …)` | `matilda.markers(data, model=fit, method=)` | `data.frame(celltype, feature, importance)` |
+| `matilda_simulate(x, reference=NULL, celltype=NULL, n=100, label=NULL, …)` | `matilda.simulate(data, model=fit, celltype=, n=)` | a simulated `SingleCellExperiment` (`celltype=NULL` ⇒ all cells) |
 
-### Tasks — file-path API (power-user / validation)
+### Tasks — combinable call
 
-| R | Python | Effect |
+| R | Python (`matilda-sc`) | Effect |
 |---|--------|--------|
-| `matilda_task_files(model, rna, adt=NULL, atac=NULL, cty, classification=FALSE, fs=FALSE, dim_reduce=FALSE, simulation=FALSE, query=FALSE, fs_method="IntegratedGradient", simulation_ct=-1, simulation_num=100, outdir=".", device)` | combinable `--classification/--fs/--dim_reduce/--simulation [--query True]` | runs the task(s) and copies the `output/` tree to `outdir` |
+| `matilda_task_files(model, rna, adt=NULL, atac=NULL, cty, classification=FALSE, fs=FALSE, dim_reduce=FALSE, simulation=FALSE, query=FALSE, fs_method="IntegratedGradient", simulation_ct=-1, simulation_num=100, outdir=".", device)` | `matilda.task(rna, adt=None, atac=None, labels=, model=fit, classification=False, dim_reduce=False, fs=False, simulation=False, ...)` | run any combination of tasks in one engine pass |
 
 ### Model handle & example data
 
@@ -141,8 +140,11 @@ script and the model architecture.
 ## Tutorial
 
 [`inst/tutorials/matilda-tutorial.Rmd`](inst/tutorials/matilda-tutorial.Rmd) — the complete
-workflow in **R** on real TEA-seq. (A separate, identically-structured **Python** tutorial — pure
-Python, `matilda-sc` function API — is provided as a Jupyter notebook for Python users.)
+workflow in **R** on real TEA-seq. A separate, identically-structured **Python** tutorial is
+provided as a Jupyter notebook for Python users. Both are runnable on Google Colab:
+
+- **R tutorial** — [https://colab.research.google.com/github/DSichang/matilda-r/blob/main/inst/colab/tutorial-r.ipynb](https://colab.research.google.com/github/DSichang/matilda-r/blob/main/inst/colab/tutorial-r.ipynb)
+- **Python tutorial** — [https://colab.research.google.com/github/DSichang/matilda-sc/blob/main/colab/tutorial-python.ipynb](https://colab.research.google.com/github/DSichang/matilda-sc/blob/main/colab/tutorial-python.ipynb)
 
 1. **Read your data** — load TEA-seq from `.h5`, `.h5ad`, 10x, or a `Seurat` `.rds` (each verified
    to give the same `SingleCellExperiment`).
@@ -158,11 +160,3 @@ Python, `matilda-sc` function API — is provided as a Jupyter notebook for Pyth
 rmarkdown::render("inst/tutorials/matilda-tutorial.Rmd")
 ```
 
----
-
-## Reproducibility
-
-On the **same hardware** the R wrapper is bit-identical to the original Python (verified across
-all tasks by `inst/scripts/parity_check.R`, `max|Δ| = 0`): TEA-seq query accuracy **0.8092** on
-GPU, **0.8148** on CPU. The only difference between machines is PyTorch GPU↔CPU floating point —
-not the wrapper. UMAP layouts vary run-to-run by construction; cluster structure is stable.
