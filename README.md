@@ -120,9 +120,4 @@ Each R verb has a one-to-one counterpart in the Python `matilda-sc` package
 `CITEseq` (RNA+ADT), `SHAREseq` (RNA+ATAC), `rna_only` (RNA). The mode selects both the Python
 script and the model architecture.
 
----
-
-```r
-rmarkdown::render("inst/tutorials/matilda-tutorial.Rmd")
-```
 
