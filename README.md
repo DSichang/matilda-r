@@ -38,15 +38,24 @@ install most smoothly with `BiocManager` if `install_github` doesn't resolve the
 
 ---
 
-## How it works (data flow)
+## Tutorial
 
-```
-your object ─▶ convert.R ─▶ io_write.R ─▶ bridge.R ─▶ [ vendored Python in basilisk env ] ─▶ io_read.R ─▶ your object
- (SCE/MAE/         (→ rna/adt/atac      (→ Matilda      (run the unchanged          (parse output      (pred / latent /
-  Seurat)           matrices + labels)   .h5 + .csv)     main_matilda_*.py)          CSV/txt files)      markers / sim SCE)
-```
+[`inst/tutorials/matilda-tutorial.Rmd`](inst/tutorials/matilda-tutorial.Rmd) — the complete
+workflow in **R** on real TEA-seq. A separate, identically-structured **Python** tutorial is
+provided as a Jupyter notebook for Python users. Both are runnable on Google Colab:
 
-The R layer is a thin, faithful driver; all the modeling math lives in the vendored Python.
+- **R tutorial** — [https://colab.research.google.com/github/DSichang/matilda-r/blob/main/inst/colab/tutorial-r.ipynb](https://colab.research.google.com/github/DSichang/matilda-r/blob/main/inst/colab/tutorial-r.ipynb)
+- **Python tutorial** — [https://colab.research.google.com/github/DSichang/matilda-sc/blob/main/colab/tutorial-python.ipynb](https://colab.research.google.com/github/DSichang/matilda-sc/blob/main/colab/tutorial-python.ipynb)
+
+1. **Read your data** — load TEA-seq from `.h5`, `.h5ad`, 10x, or a `Seurat` `.rds` (each verified
+   to give the same `SingleCellExperiment`).
+2. **Train** (`matilda_train`).
+3. **Classification** of held-out query cells (+ per-cell-type accuracy plot).
+4. **Dimension reduction** (+ latent-space UMAP).
+5. **Feature selection** (+ marker heatmap).
+6. **Simulation** (+ real-vs-synthetic UMAP).
+7. **Modality combinations Matilda supports** — RNA only / RNA+ADT / RNA+ATAC / RNA+ADT+ATAC on the
+   *same* cells (a modality ablation; adding the ADT panel helps most).
 
 ---
 
@@ -69,30 +78,6 @@ The R layer is a thin, faithful driver; all the modeling math lives in the vendo
 | `utils.R`   | `.mode_of()`, `.ncells()`, `.h5_features()`, `.pkg_py()` |
 | `data.R`    | `matilda_example_sce()`, `matilda_example_teaseq()` |
 
-### Python — the engine (`inst/python/matilda/`, vendored byte-identical to upstream)
-
-| File | Role | Triggered by |
-|------|------|--------------|
-| `main_matilda_train.py`     | multimodal training | `matilda_train(_files)` (CITEseq/SHAREseq/TEAseq) |
-| `main_matilda_task.py`      | multimodal tasks (classify / dim_reduce / fs / simulation) | `matilda_classify/reduce/markers/simulate`, `matilda_task_files` |
-| `main_matilda_rna_train.py` | RNA-only training | `matilda_train(_files)` when only RNA |
-| `main_matilda_rna_task.py`  | RNA-only tasks | the task verbs when `mode == "rna_only"` |
-| `util.py`                   | h5/csv IO, log2 + z-score, Dataset, train/infer helpers | imported by all scripts |
-| `learn/model.py`            | VAE + classifier: CITEseq / SHAREseq / TEAseq | imported by the multimodal scripts |
-| `learn/model_rna.py`        | VAE + classifier: rna_only | imported by the rna scripts |
-| `learn/train.py`            | `train_model()` (training loop) | imported by the train scripts |
-| `learn/predict.py`          | `test_model()` (inference / accuracy) | imported by the task scripts |
-
-### Supporting files
-
-| Path | Purpose |
-|------|---------|
-| `inst/tutorials/matilda-tutorial.Rmd` | **the tutorial** — a Python ⇄ R mirror on TEA-seq (see below) |
-| `inst/scripts/parity_check.R` | R-vs-Python bit-parity across all tasks |
-| `tests/testthat/` | unit tests (+ `helper-skip.R`, `helper-toy.R`) |
-| `man/` | generated documentation |
-
----
 
 ## API reference
 
@@ -136,25 +121,6 @@ Each R verb has a one-to-one counterpart in the Python `matilda-sc` package
 script and the model architecture.
 
 ---
-
-## Tutorial
-
-[`inst/tutorials/matilda-tutorial.Rmd`](inst/tutorials/matilda-tutorial.Rmd) — the complete
-workflow in **R** on real TEA-seq. A separate, identically-structured **Python** tutorial is
-provided as a Jupyter notebook for Python users. Both are runnable on Google Colab:
-
-- **R tutorial** — [https://colab.research.google.com/github/DSichang/matilda-r/blob/main/inst/colab/tutorial-r.ipynb](https://colab.research.google.com/github/DSichang/matilda-r/blob/main/inst/colab/tutorial-r.ipynb)
-- **Python tutorial** — [https://colab.research.google.com/github/DSichang/matilda-sc/blob/main/colab/tutorial-python.ipynb](https://colab.research.google.com/github/DSichang/matilda-sc/blob/main/colab/tutorial-python.ipynb)
-
-1. **Read your data** — load TEA-seq from `.h5`, `.h5ad`, 10x, or a `Seurat` `.rds` (each verified
-   to give the same `SingleCellExperiment`).
-2. **Train** (`matilda_train`).
-3. **Classification** of held-out query cells (+ per-cell-type accuracy plot).
-4. **Dimension reduction** (+ latent-space UMAP).
-5. **Feature selection** (+ marker heatmap).
-6. **Simulation** (+ real-vs-synthetic UMAP).
-7. **Modality combinations Matilda supports** — RNA only / RNA+ADT / RNA+ATAC / RNA+ADT+ATAC on the
-   *same* cells (a modality ablation; adding the ADT panel helps most).
 
 ```r
 rmarkdown::render("inst/tutorials/matilda-tutorial.Rmd")
