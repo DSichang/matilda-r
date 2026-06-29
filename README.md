@@ -76,7 +76,7 @@ provided as a Jupyter notebook for Python users. Both are runnable on Google Col
 | `basilisk.R`| the bundled Python environment (torch 2.1.2, captum, scanpy, pandas, …) |
 | `rundir.R`  | stage the temporary `../` tree the scripts expect; seed the trained checkpoint |
 | `utils.R`   | `.mode_of()`, `.ncells()`, `.h5_features()`, `.pkg_py()` |
-| `data.R`    | `matilda_example_sce()`, `matilda_example_teaseq()` |
+| `data.R`    | `matilda_download_example()` |
 
 
 ## API reference
@@ -112,8 +112,6 @@ Each R verb has a one-to-one counterpart in the Python `matilda-sc` package
 |---|--------|
 | `matilda_model(object)` | extract the stored `matilda_model` from an SCE/MAE (or pass one through) |
 | `print(<matilda_model>)` | summary: mode, cell types, latent dim, per-modality feature counts, hyperparameters |
-| `matilda_example_sce(n_cells=60)` | a tiny synthetic multimodal SCE for examples / quick trials |
-| `matilda_example_teaseq(dir=NULL)` | resolve the 8 TEA-seq demo file paths (`options(matilda.demo=)` / `MATILDA_DEMO`) |
 | `matilda_download_example()` | download + cache the TEA-seq demo dataset (~75 MB) used by the tutorial; returns the local dir |
 
 **Modes** are auto-detected from which modalities are present: `TEAseq` (RNA+ADT+ATAC),
